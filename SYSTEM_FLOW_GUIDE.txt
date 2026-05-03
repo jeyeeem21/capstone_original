@@ -1,0 +1,1795 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              KJP RICEMILL — COMPLETE SYSTEM FLOW GUIDE                       ║
+║     How every part of the system connects, works, and flows together         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  1. HIGH-LEVEL ARCHITECTURE                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  ┌─────────────┐      HTTP/JSON       ┌─────────────────────────┐
+  │   REACT     │  ←─────────────────→ │      LARAVEL            │
+  │   FRONTEND  │    Sanctum Tokens    │      BACKEND (API)      │
+  │  (Vite)     │                      │                         │
+  │  Port 5173  │                      │      Port 8000          │
+  └─────────────┘                      └────────────┬────────────┘
+                                                    │
+                                                    ▼CVBNMN
+                                            ┌───────────────┐
+                                            │    MySQL DB    │
+                                            │    (kjpdb)     │
+                                            └───────────────┘
+
+  FRONTEND STACK:  React 19, React Router, Tailwind CSS, Recharts
+  BACKEND STACK:   Laravel 12, Sanctum (token auth), Eloquent ORM
+  PATTERN:         Service Layer  →  Controllers are thin, Services hold logic
+  CACHING:         Backend: file cache (5 min TTL)
+                   Frontend: Memory + localStorage (stale-while-revalidate)
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  2. USER ROLES & ACCESS                                                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  ┌─────────────┬──────────────────────────────────────────────────────────┐
+  │ ROLE        │ ACCESS                                                   │
+  ├─────────────┼──────────────────────────────────────────────────────────┤
+  │ super_admin │ EVERYTHING — full module access, user management,       │
+  │             │ archives, settings, can void sales without password,    │
+  │             │ /superadmin/* routes                                    │
+  ├─────────────┼──────────────────────────────────────────────────────────┤
+  │ admin       │ All operational modules (products, procurement,         │
+  │             │ drying, processing, sales, partners, staff mgmt),       │
+  │             │ settings, POS — /admin/* routes                         │
+  │             │ Cannot void sales without super admin password          │
+  ├─────────────┼──────────────────────────────────────────────────────────┤
+  │ staff       │ POS only, read products, create sales, view orders      │
+  │             │ /staff/* routes (dashboard, profile, POS)               │
+  ├─────────────┼──────────────────────────────────────────────────────────┤
+  │ client      │ Shop, orders, cart, profile — /client/* routes          │
+  │             │ (currently uses mock data)                              │
+  ├─────────────┼──────────────────────────────────────────────────────────┤
+  │ driver      │ Deliveries, profile — /driver/* routes                  │
+  │             │ (currently uses mock data)                              │
+  └─────────────┴──────────────────────────────────────────────────────────┘
+
+
+  HOW LOGIN WORKS:
+  ~~~~~~~~~~~~~~~~
+  1. User enters email + password on the public site (Home page login modal)
+  2. Frontend calls POST /api/auth/login
+  3. Backend validates credentials, checks user.status = 'active'
+  4. Backend revokes ALL old tokens, creates new Sanctum token with
+     role-based abilities (super_admin gets ['*'], admin gets module list,
+     staff gets limited permissions)
+  5. Backend returns { token, user } — logged to audit trail
+  6. Frontend stores token in localStorage, sets user in AuthContext
+  7. React Router redirects based on role:
+       super_admin → /superadmin/dashboard
+       admin       → /admin/dashboard
+       staff       → /staff/dashboard
+
+  ON APP RELOAD:
+  ~~~~~~~~~~~~~~
+  1. AuthContext checks localStorage for auth_token
+  2. If found, calls GET /api/auth/me to validate
+  3. If valid → restore session. If invalid → clear token silently
+
+  ON 401 ERROR (any API call):
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  1. apiClient detects 401 response
+  2. Clears auth_token from localStorage
+  3. Clears all API caches
+  4. Redirects to /?login=true
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  3. THE SUPPLY CHAIN — CORE BUSINESS FLOW                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  This is the HEART of the system. Rice flows through 5 stages:
+
+  ┌───────────┐     ┌─────────┐     ┌────────────┐     ┌─────────┐     ┌──────┐
+  │ PROCURE   │ ──→ │  DRY    │ ──→ │   MILL     │ ──→ │ STOCK   │ ──→ │ SELL │
+  │ (buy raw) │     │ (sun/   │     │ (process)  │     │ (bags)  │     │(POS) │
+  │           │     │  machine)│     │            │     │         │     │      │
+  └───────────┘     └─────────┘     └────────────┘     └─────────┘     └──────┘
+   Supplier          Days/Cost       Input→Output       Products        Sales
+   Variety            Sacks           Husk/Yield        Weight/Unit     Orders
+   Sacks/KG           Price           Operator          Cost Trace      Payment
+   Batch              Status          Drying Source      Floor Alert    Delivery
+
+
+  ─────────────────────────────────────────────────────────────────────────────
+  STAGE 1: PROCUREMENT  (Buying Raw Rice)
+  ─────────────────────────────────────────────────────────────────────────────
+
+  PAGE:      Procurement (admin)
+  API:       POST /api/procurements
+  SERVICE:   ProcurementService
+  MODEL:     Procurement, Supplier, Variety
+
+  WHAT HAPPENS:
+  1. Admin selects a Supplier (or creates one inline by typing a new name)
+  2. Admin selects a Variety (e.g., "Dinorado", "Sinandomeng")
+  3. Admin enters quantity (kg), number of sacks, price per kg
+  4. System calculates total_cost = quantity_kg × price_per_kg
+  5. Procurement is created with status = "Pending"
+  6. Optionally assigned to a Procurement Batch
+
+  PROCUREMENT BATCHES:
+  - Group procurements of the same variety/season together
+  - Batch tracks total/remaining sacks and kg
+  - When sending to drying, can dry an entire batch at once
+  - Batch statuses: Open → Closed → Completed
+
+  DATA CREATED:
+  - procurements row (supplier_id, variety_id, quantity_kg, sacks,
+    price_per_kg, total_cost, status, batch_id)
+  - Optionally: new supplier row, batch assignment
+
+  STATUS FLOW:
+    Pending → Drying → Dried → Completed
+                              → Cancelled
+
+  WHAT TRIGGERS STATUS CHANGES:
+  - "Drying" → when ALL sacks are sent to drying processes
+  - "Dried"  → when associated drying process is marked as dried
+  - "Completed" → (manual or when all processing is done)
+
+
+  ─────────────────────────────────────────────────────────────────────────────
+  STAGE 2: DRYING  (Drying the Raw Rice)
+  ─────────────────────────────────────────────────────────────────────────────
+
+  PAGE:      Drying Process (admin)
+  API:       POST /api/drying-processes
+  SERVICE:   DryingProcessService
+  MODEL:     DryingProcess, DryingBatchProcurement (pivot)
+
+  WHAT HAPPENS:
+  1. Admin creates a drying process from either:
+     a. A SINGLE procurement → takes specific sacks from that procurement
+     b. A BATCH → automatically distributes sacks proportionally across
+        all procurements in the batch via the pivot table
+
+  2. System records: quantity_kg, sacks, price (cost per sack per day)
+  3. Drying starts with days = 0, status = "Drying"
+
+  DAILY OPERATIONS:
+  - Admin clicks "Increment Day" → days += 1
+  - total_price recalculated = sacks × price × days
+  
+  WHEN DRYING IS DONE:
+  - Admin clicks "Mark as Dried"
+  - Status → "Dried", dried_at = now
+  - All linked procurement statuses → "Dried"
+  - The dried rice is now available for Processing (milling)
+
+  DELETION RULES:
+  - Can delete a drying process ONLY if quantity_out = 0
+    (no rice has been sent to processing yet)
+  - Deleting returns sacks/kg back to the procurement/batch
+
+  DATA CREATED:
+  - drying_processes row (procurement_id or batch_id, quantity_kg,
+    sacks, days, price, total_price, status, dried_at)
+  - drying_batch_procurements pivot rows (if batch mode)
+    (drying_process_id, procurement_id, sacks_taken, quantity_kg)
+
+  COST FORMULA:
+    Drying Cost = sacks × price_per_sack_per_day × days
+
+
+  ─────────────────────────────────────────────────────────────────────────────
+  STAGE 3: PROCESSING / MILLING  (Hulling the Dried Rice)
+  ─────────────────────────────────────────────────────────────────────────────
+
+  PAGE:      Processing (admin)
+  API:       POST /api/processings
+  SERVICE:   ProcessingService
+  MODEL:     Processing, ProcessingDryingSource (pivot)
+
+  WHAT HAPPENS:
+  1. Admin creates a processing record selecting one or more dried 
+     drying processes as input sources
+  2. Admin enters total input_kg (how much dried rice to mill)
+  3. System proportionally splits input across selected drying sources
+     based on each source's remaining capacity (available = quantity_kg –
+     quantity_out)
+  4. Processing created with status = "Pending"
+
+  PROCESSING STAGES:
+  - "Pending" → admin created it, milling not started
+  - "Processing" → admin clicked "Start Processing" → milling in progress
+  - "Completed" → admin enters output_kg (milled rice produced)
+      → husk_kg calculated = input_kg – output_kg
+      → yield_percent = (output_kg / input_kg) × 100
+
+  AFTER COMPLETION:
+  - The milled rice (output_kg) is available for stock distribution
+  - The remaining amount = output_kg – stock_out (stock_out tracks how
+    much has already been sent to products)
+
+  DELETION RULES:
+  - Can delete only if stock_out = 0 (no stock distributed)
+  - Deleting returns quantity_out back to the drying processes
+
+  RETURN TO PROCESSING:
+  - A completed processing can be reverted to "Processing" status
+  - Only allowed if stock_out = 0
+
+  DATA CREATED:
+  - processings row (procurement_id, drying_process_id, input_kg,
+    output_kg, husk_kg, yield_percent, stock_out, status, operator_name,
+    processing_date, completed_date)
+  - processing_drying_sources pivot rows
+    (processing_id, drying_process_id, quantity_kg)
+
+  KEY RELATIONSHIP:
+    Each drying source contributes a measured amount to the processing.
+    The system tracks EXACTLY how much dried rice was taken from each
+    drying process via the pivot table.
+
+
+  ─────────────────────────────────────────────────────────────────────────────
+  STAGE 4: STOCK DISTRIBUTION  (Bagging into Products)
+  ─────────────────────────────────────────────────────────────────────────────
+
+  PAGE:      Inventory (admin) — "Distribute Stock" button on each product
+  API:       POST /api/products/{id}/distribute-stock
+  CONTROLLER: ProductController
+  MODEL:     Product, StockLog
+
+  WHAT HAPPENS:
+  1. Admin opens a product (e.g., "Dinorado 5kg") and clicks "Distribute"
+  2. System shows all completed processings with remaining milled rice
+     that MATCHES this product's variety
+  3. Admin selects source processings and enters how many kg to take
+     from each
+  4. System calculates:
+       total_kg    = sum of all kg taken
+       total_units = floor(total_kg / product_weight)
+       excess_kg   = total_kg – (total_units × product_weight)
+     → Excess is deducted from the last source (only whole units taken)
+  5. For each source processing: processing.stock_out += kg_consumed
+  6. Product.stocks += total_units
+
+  COST TRACING (this is recorded in stock_logs):
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  For each distribution, the system traces costs BACKWARD:
+
+    Processing → Drying Sources → Batch Procurements → Procurement
+
+  And computes:
+    procurement_cost = total procurement cost proportional to kg used
+    drying_cost      = total drying cost proportional to sacks/kg used
+    total_cost       = procurement_cost + drying_cost
+    cost_per_unit    = total_cost / units
+    selling_price    = product.price × units
+    profit_per_unit  = selling_price/units – cost_per_unit
+    profit_margin    = (profit_per_unit / selling_price) × 100
+
+  DATA CREATED:
+  - stock_logs row: product_id, type='in', quantity_before, quantity_change,
+    quantity_after, kg_amount, source_type='processing', source_id,
+    procurement_cost, drying_cost, total_cost, cost_per_unit, selling_price,
+    profit_per_unit, profit_margin
+
+  STOCK FLOOR ALERTS:
+  - Each product has a stock_floor (minimum stock threshold)
+  - Dashboard shows products at or below stock_floor as "Low Stock"
+  - Products with 0 stock shown as "Out of Stock"
+
+
+  ─────────────────────────────────────────────────────────────────────────────
+  STAGE 5: SALES & POS  (Selling the Products)
+  ─────────────────────────────────────────────────────────────────────────────
+
+  PAGE:      Point of Sale (admin/staff), Sales page, Orders page
+  API:       POST /api/sales/order, PUT /api/sales/{id}/status
+  SERVICE:   SaleService
+  MODEL:     Sale, SaleItem, Customer, StockLog
+
+  TWO TYPES OF SALES:
+
+  A) POS (Point of Sale) — Walk-in Transactions:
+     1. Staff/admin adds products to cart with quantities
+     2. Selects customer (optional, can create inline)
+     3. Chooses payment method (cash, gcash)
+     4. Enters amount tendered → system calculates change
+     5. Transaction created with status = "completed"
+     6. Stock deducted IMMEDIATELY
+     7. StockLog created (type='out', source='sale')
+     8. Transaction ID format: TXN-YYYYMMDD-NNN
+
+  B) ORDERS — Online/Phone Orders:
+     1. Admin creates order for a customer
+     2. Selects products, quantities, payment method (cash/gcash/cod/pay_later)
+     3. Order created with status = "pending" → NO stock deducted yet
+     4. Transaction ID format: ORD-YYYYMMDD-NNN
+     
+     ORDER STATUS FLOW:
+     ┌─────────┐    ┌────────────┐    ┌─────────┐    ┌───────────┐
+     │ Pending │ ──→│ Processing │ ──→│ Shipped │ ──→│ Delivered │
+     └────┬────┘    └─────┬──────┘    └────┬────┘    └─────┬─────┘
+          │               │                │               │
+          ▼               ▼                ▼               ▼
+     ┌──────────┐  ┌──────────┐    ┌──────────┐   ┌────────────────┐
+     │Cancelled │  │Cancelled │    │Cancelled │   │Return Requested│
+     └──────────┘  │(+restore │    │(+restore │   └───────┬────────┘
+                   │ stock)   │    │ stock)   │           │
+                   └──────────┘    └──────────┘      ┌────┴────┐
+                                                     ▼         ▼
+                                               ┌───────────┐ ┌────────┐
+                                               │Picking Up │ │Rejected│
+                                               │(+driver   │ │(→back  │
+                                               │ assigned) │ │to deliv│
+                                               └─────┬─────┘ └────────┘
+                                                     ▼
+                                               ┌──────────────┐
+                                               │   Returned   │
+                                               │ (+restore    │
+                                               │  stock)      │
+                                               └──────────────┘
+
+     STOCK DEDUCTION: Happens at Pending → Processing transition
+     STOCK RESTORE:   Happens on Cancel (if stock was deducted),
+                      Return, or Void
+
+  VOIDING A SALE:
+  - Only super_admin can void directly
+  - Admin/staff must enter super_admin password to void
+  - Restores stock, creates void StockLog, decrements customer order count
+  - voided_by and authorized_by recorded on the sale record
+
+  RESTOCK FROM VOID/RETURN:
+  - POST /api/sales/{id}/restock with items: [{id, quantity}]
+  - Selectively restock individual sale items back to inventory
+  - Each sale_item has a `restocked` boolean flag to track status
+  - Prevents double-restocking of the same item
+
+  RETURN FLOW (Complete):
+  ──────────────────────
+  1. Request Return: Admin submits return_reason, return_notes,
+     return_proof (multi-image upload). Status → "return_requested"
+  2. Accept Return: Admin assigns return_pickup_driver,
+     return_pickup_plate, return_pickup_date. Status → "picking_up"
+  3. Mark Returned: Pickup complete. Status → "returned"
+     Stock automatically restored to products
+  4. Reject Return: Admin rejects return request.
+     Status → "delivered" (reverted)
+
+  PAYMENT TRACKING:
+  ─────────────────
+  - Sales have payment_status (paid/not_paid) + paid_at timestamp
+  - Admin can mark unpaid orders as paid via POST /api/sales/{id}/pay
+  - Payment proof can be uploaded (images stored as JSON array)
+  - /api/sales/check-reference validates GCash reference uniqueness
+
+  DATA CREATED:
+  - sales row: transaction_id, customer_id, subtotal, discount, delivery_fee,
+    total, amount_tendered, change_amount, payment_method, status, notes,
+    delivery_address, distance_km, driver_name, driver_plate_number,
+    return_reason, return_notes
+  - sale_items rows: sale_id, product_id, quantity, unit_price, subtotal,
+    restocked (boolean, tracks if item was restocked after void/return)
+  - stock_logs rows: one per product (type='out' or type='in' for returns)
+
+  INLINE CREATION & AUDIT TRAILS:
+  - POS: Can create new customer inline (name, contact, email).
+    The new customer is created via SaleService, and SaleController logs
+    an audit trail: action='CREATE', module='Customer', source='inline_pos'.
+  - Procurement: Can create new supplier inline (name, contact, phone, email, address).
+    The new supplier is created via ProcurementService, and ProcurementController
+    logs an audit trail: action='CREATE', module='Supplier', source='inline_procurement'.
+  - Both inline creations appear in Dashboard's Recent Activity.
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  4. DELIVERY SYSTEM                                                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  ORDER-BASED SHIPPING (Staff Drivers):
+  ─────────────────────────────────────
+  PAGE:      Admin Orders page → Ship modal
+  MODEL:     Sale (driver_name, driver_plate_number), User (position='Driver')
+
+  HOW IT WORKS:
+  1. Admin has Staff members with position = 'Driver' and truck_plate_number
+     (managed in Staff Management page)
+  2. When order status is Processing → Shipped, a Ship modal opens:
+     - Dropdown to select a Driver (from users table, position=Driver, active)
+     - Each driver shows name, contact, and plate number badge
+     - Estimated Delivery Date auto-calculated from distance:
+       • Speed assumption: ~40 km/h truck + 1 hr loading
+       • +1 day allowance buffer
+       • If total hours > 8 (workday), pushed to next day(s)
+       • Date shown as range: "Est. Mar 5 – Mar 6 (28.5 km)"
+       • Admin can manually adjust the date
+     - Optional delivery notes
+     - "Client Delivery Note" preview shows: driver, plate, contact, address, date
+  3. On confirm: sale updated with status='shipped', driver_name, driver_plate_number
+  4. Audit trail logged for the status change
+
+  DB COLUMNS (sales table):
+  - driver_name         varchar(255)   NULLABLE — name of assigned driver
+  - driver_plate_number varchar(20)    NULLABLE — truck plate of assigned driver
+
+  DB COLUMNS (users table):
+  - truck_plate_number  varchar(20)    NULLABLE — for staff with position='Driver'
+
+  VIEW MODALS:
+  - Orders view modal: Shows "Assigned Driver" card (purple) with name + plate badge
+    for shipped/delivered orders
+  - Sales view modal: Same driver card display
+  - Both modals are polished with gradient headers, icon grids, colored sections,
+    items table with variety color dots, delivery fee/discount rows, green total card
+
+  LEGACY DELIVERY SYSTEM (separate logistics, not tied to orders):
+  ─────────────────────────────────────
+  PAGE:      Admin Orders page (Deliveries tab) + Driver app pages
+  API:       /api/deliveries/*, /api/drivers/*
+  MODEL:     Driver, DeliveryAssignment, DeliveryItem
+
+  HOW IT WORKS:
+  1. Admin manages Drivers (name, phone, license, vehicle, plate number)
+  2. Admin creates a Delivery Assignment:
+     - Assigns a Driver
+     - Sets destination, contact person, delivery date
+     - Sets priority (Low / Normal / High / Urgent)
+     - Adds items (product, quantity, price)
+     - Generates delivery_number automatically
+
+  DELIVERY STATUS FLOW:
+    Pending → In Transit → Delivered (with proof + driver notes)
+                        → Failed (with driver notes)
+                        → Cancelled
+
+  NOTE: Legacy deliveries are INDEPENDENT from orders. They are a
+  separate logistics tracking system. Stock is NOT automatically deducted
+  through deliveries.
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  5. PRODUCT MANAGEMENT                                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  PAGE:      Products / Varieties / Inventory (admin)
+  API:       /api/products/*, /api/varieties/*, /api/stock-logs
+
+  THREE SUB-PAGES:
+  ────────────────
+
+  A) VARIETIES (rice types):
+     - Name, description, color (for UI badges), status
+     - Examples: Dinorado, Sinandomeng, Jasmine
+     - Soft-deletable (goes to Archives)
+     - products_count tracks how many products use this variety
+
+  B) PRODUCTS (sellable items):
+     - Each product belongs to ONE variety
+     - Has weight (kg per unit, e.g., 5.00), price, stock count
+     - Unit label auto-generated from weight (e.g., "5kg")
+     - stock_floor = minimum threshold before "low stock" alert
+     - image = product photo (uploaded via FormData, stored in storage/)
+     - Public pages show product image with business logo as fallback
+     - Status: active/inactive (toggle-able)
+     - Soft-deletable via is_deleted flag
+
+     RULES:
+     - Cannot change variety or weight while product has existing stock
+       (this would break unit consistency)
+     - Stock only increases through distributeStock (from processing)
+     - Stock only decreases through sales (POS/orders)
+
+  C) INVENTORY:
+     - 4 tabs: Inventory | In/Out | Growth Analysis | Cost Records
+     - Shows stock movement history (stock_logs)
+     - Double-click any stock-in row → Cost Record Detail Modal
+       shows full production chain (procurement → drying → processing)
+       with costs and profit analysis
+     - Columns: date, product, type (in/out), quantity, kg, source,
+       costs, profit margin
+
+  D) GROWTH ANALYSIS TAB (Inventory):
+     - Period filters: Daily, Weekly, Monthly, Bi-Annually, Annually
+     - Stats cards: Total Sales, Transactions, Units Sold, Avg Transaction
+     - Line chart: Revenue trends with clickable dots for drill-down
+     - Donut charts: Sales by Variety, Top Selling Products
+     - Per-Product Growth Cards:
+       ┌──────────────────────────────────────────────────────────────────┐
+       │ Fetched from GET /api/sales/product-growth?period=<period>     │
+       │ Backend compares current period vs previous period:             │
+       │   daily      → today vs yesterday                              │
+       │   weekly     → this week vs last week                          │
+       │   monthly    → this month vs last month                        │
+       │   bi-annually→ current half-year vs previous half              │
+       │   annually   → this year vs last year                          │
+       │                                                                 │
+       │ Each product card shows:                                        │
+       │   • Product name + variety color dot                            │
+       │   • Current period units sold                                   │
+       │   • Growth % with ▲/▼ trend arrow (green/red)                  │
+       │   • Previous period units for comparison                        │
+       │   • Revenue + revenue growth %                                  │
+       └──────────────────────────────────────────────────────────────────┘
+     - Sales Records DataTable below, filtered by chart click
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  6. PARTNER MANAGEMENT                                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  PAGE:      Partners / Supplier / Customer (admin)
+  API:       /api/suppliers/*, /api/customers/*
+
+  A) SUPPLIERS:
+     - Name, contact, phone, email, address, status
+     - products count (how many procurements — legacy label name)
+     - Soft-deletable
+     - Can be created inline when creating a procurement
+     - Email uniqueness checked via POST /api/suppliers/check-email
+
+  B) CUSTOMERS:
+     - Name, contact, phone, email, address, status
+     - orders count (incremented when order status → delivered)
+     - Soft-deletable
+     - Can be created inline when creating a sale/order
+     - Email uniqueness checked via POST /api/customers/check-email
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  7. DASHBOARD                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  PAGE:      Dashboard (admin/super_admin)
+  API:       GET /api/dashboard/stats?period=daily|monthly|yearly
+
+  WHAT IT SHOWS:
+  ─────────────
+  ┌──────────────────┬─────────────────────────────────────────────────────┐
+  │ SECTION          │ DATA                                                │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Overview Cards   │ Total revenue, orders, customers, products,        │
+  │                  │ items sold, avg order value + month trends (%)      │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Revenue Chart    │ Line chart: revenue, orders, items over time       │
+  │ (toggleable)     │ Toggle series by clicking legend                   │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Processing Chart │ Bar chart: input_kg vs output_kg over time         │
+  │ (toggleable)     │ + total I/O, avg yield%                            │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Procurement      │ Total count, cost, kg, sacks, pending, suppliers   │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Inventory Health │ Total stock, low/out-of-stock/healthy counts       │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Top Products     │ Top 5 by revenue (from completed/delivered sales)  │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Recent Sales     │ Last 8 transactions with customer & total          │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Low Stock Alert  │ Products at or below stock_floor                   │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Payment Pie      │ Breakdown by cash/gcash/cod/pay_later              │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Status Pie       │ Breakdown by order status                          │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Pipeline         │ Active work: pending procurements, active drying,  │
+  │                  │ active processing, pending orders, deliveries      │
+  ├──────────────────┼─────────────────────────────────────────────────────┤
+  │ Recent Activity  │ Audit trail entries (who did what, when)           │
+  └──────────────────┴─────────────────────────────────────────────────────┘
+
+  LAYOUT ORDER (top to bottom):
+  ─────────────────────────────
+  1. Overview Cards (6 stat cards with trends)
+  2. Revenue Chart + Processing Chart (side by side)
+  3. Summary sections: Procurement, Inventory Health, Top Products
+  4. Donut charts: Payment Method Pie + Order Status Pie
+  5. Pipeline (active work-in-progress)
+  6. Recent Sales (full width, last 8 transactions)     ← FIRST table
+  7. Recent Activity + Low Stock Alerts (side by side)   ← BELOW sales
+
+  Revenue counts only "completed" and "delivered" sales.
+  Trends are month-over-month percentage changes.
+  Data cached for 5 minutes; "Refresh" button clears cache.
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  8. SETTINGS & CUSTOMIZATION                                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  PAGE:      Settings (admin) — tabbed interface
+  
+  TABS:
+  ─────
+  A) APPEARANCE SETTINGS:
+     - Color theme customization (primary, secondary, sidebar, accent, etc.)
+     - 17 color keys stored in appearance_settings table
+     - ThemeContext generates full palette (50-950 shades) from each color
+     - Applied via CSS custom properties → instant live preview
+     - "Reset to Defaults" restores factory colors
+     - Colors shared with public website via cookie middleware
+
+  B) BUSINESS SETTINGS:
+     - Business name, tagline, description, phone, email, address
+     - Logo upload (stored in public/storage/)
+     - Used across admin panel header, receipts, invoices
+     - Loaded by BusinessSettingsContext on app mount
+
+  C) WEBSITE CONTENT:
+     - Home page content: hero title/subtitle/CTA, feature cards, 
+       USP section, gallery, CTA section, stats
+     - About page content: company story, mission/vision, values, team
+     - Hero image upload
+     - Content stored as page+section+key in website_contents table
+
+  D) USER MANAGEMENT (Super Admin → "Staff Management" page):
+     - Add/edit/delete admin & staff users
+     - Fields: name, email, password, role, position, date_hired,
+       first_name, last_name, phone, status
+     - User statistics: total, active, admins, staff count
+
+  E) ARCHIVES (Super Admin only):
+     - View ALL soft-deleted records across modules (suppliers, customers,
+       varieties, procurements, drying, processings, products)
+     - Restore or permanently delete
+     - Archive statistics per module
+
+  F) AUDIT TRAIL (Super Admin only):
+     - Complete log of every action taken in the system
+     - Who did it, what module, what action, details (JSON), IP, timestamp
+     - Searchable, filterable by module and action
+     - Used for accountability and debugging
+
+  G) DATABASE BACKUP:
+     - Export full database as SQL file
+     - Shows database info (size, tables, rows)
+     - Download triggered via GET /api/database/export
+
+  H) SALES PREDICTIONS:
+     - Predictive analytics for sales forecasting
+     - GET /api/sales-predictions
+     - Force refresh with POST /api/sales-predictions/refresh
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  9. FRONTEND ARCHITECTURE FLOW                                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  APP BOOTSTRAP:
+  ──────────────
+  main.jsx
+    └─→ App.jsx
+          ├─→ AuthProvider         (wraps everything — manages login state)
+          │     └─→ checks localStorage for auth_token
+          │         └─→ calls /api/auth/me to validate
+          ├─→ BusinessSettingsProvider (loads business name/logo/etc.)
+          ├─→ ToastProvider        (global toast notifications)
+          └─→ BrowserRouter
+                └─→ AppRoutes (role-based routing)
+
+  WHEN A PAGE LOADS:
+  ──────────────────
+  1. ProtectedRoute checks: is user logged in? does role match?
+     → If no: redirect to /?login=true
+  2. Layout renders (MainLayout for admin, StaffLayout for staff, etc.)
+     → Sidebar navigation, header with user info
+  3. Page component mounts
+  4. Page calls API via hook: useDataFetch('cacheKey', apiFn)
+     → useDataFetch checks memory cache → localStorage cache → API
+     → Returns { data, loading, error, refresh }
+  5. Data displayed in DataTable, charts, cards, etc.
+
+  WHEN USER PERFORMS AN ACTION (create/update/delete):
+  ────────────────────────────────────────────────────
+  1. User fills form, clicks submit
+  2. Component calls mutation via useMutation hook or direct API call
+  3. API module calls apiClient.post/put/delete
+  4. On success:
+     → Toast notification shown
+     → Related caches invalidated (apiClient.cache.remove('key'))
+     → Data refetched (triggers re-render with fresh data)
+  5. On error:
+     → Validation errors extracted from response
+     → Error toast shown
+     → Form fields highlighted
+
+  DATA TABLE PATTERN (used on most pages):
+  ─────────────────────────────────────────
+  - Reusable <DataTable> component
+  - Features: search, sort, pagination, column visibility toggle,
+    row selection, bulk actions, empty state, loading skeleton
+  - Row click → open detail/edit modal
+  - Toolbar: Add button, export, filter, refresh
+
+  THEME SYSTEM:
+  ─────────────
+  1. Backend stores 17 color keys in appearance_settings
+  2. ThemeContext fetches them on mount
+  3. For each color, generates shades (50-950) using HSL manipulation
+  4. Applies as CSS custom properties: --primary-500, --sidebar-700, etc.
+  5. Tailwind config maps to these variables
+  6. Dark mode: separate shade mapping, auto-detected or manual toggle
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  10. BACKEND ARCHITECTURE FLOW                                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  REQUEST LIFECYCLE:
+  ──────────────────
+  1. HTTP request hits Laravel
+  2. CORS middleware allows React origin (localhost:5173)
+  3. auth:sanctum middleware validates Bearer token
+  4. Route dispatches to Controller method
+  5. Controller validates input (FormRequest or inline)
+  6. Controller calls Service method
+  7. Service:
+     a. Wraps in DB::transaction (for writes)
+     b. Performs business logic
+     c. Creates/updates models
+     d. Logs to AuditTrail (via AuditLogger trait)
+     e. Clears related caches
+  8. Controller returns:
+     - Single item: new ApiResource(model)
+     - Collection: ApiResource::collection(models)
+     - Error: ApiResponse trait → errorResponse(message, code)
+  9. Response sent as JSON
+
+  CACHING STRATEGY:
+  ─────────────────
+  - HasCaching trait: getCachedData(key, query, ttl=300)
+  - Cache driver: file (storage/framework/cache)
+  - Every service has a CACHE_KEY constant (e.g., 'procurements_all')
+  - On create/update/delete: Cache::forget(CACHE_KEY)
+  - Related caches also cleared (e.g., creating a drying process
+    also clears procurements and batches cache)
+
+  AUDIT TRAIL:
+  ────────────
+  - AuditLogger trait on controllers
+  - logAudit(action, module, description, details=[])
+  - Records: user_id, action, module, description, details (JSON),
+    ip_address, user_agent
+  - Actions: CREATE, UPDATE, DELETE, LOGIN, LOGOUT, RETURN,
+    VERIFY_EMAIL, EMAIL_VERIFIED, CREATE_ACCOUNT, etc.
+  - Inline creation audit trails:
+    • POS creates a new customer inline → logged as CREATE/Customer (source=inline_pos)
+    • Procurement creates a new supplier inline → logged as CREATE/Supplier (source=inline_procurement)
+  - All audit entries appear in Dashboard → Recent Activity panel
+
+  SOFT DELETES:
+  ─────────────
+  - Models with SoftDeletes: Supplier, Customer, Variety, Procurement,
+    DryingProcess, Processing, ProcurementBatch, Driver,
+    DeliveryAssignment
+  - Products use is_deleted boolean flag instead
+  - Soft-deleted records accessible via Archives page (super admin)
+  - Can be restored or permanently deleted
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  11. COMPLETE API ENDPOINT MAP                                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  PUBLIC (no auth):
+  ─────────────────
+  POST   /api/auth/login                       Login
+  GET    /api/products/featured                 Featured products
+  GET    /api/appearance/*                      Theme colors
+  GET    /api/website-content/*                 CMS content
+  GET    /api/business-settings                 Business info
+
+  AUTHENTICATED (auth:sanctum):
+  ─────────────────────────────
+  ┌─ AUTH ──────────────────────────────────────────────────────────────────┐
+  │ POST   /api/auth/logout                    Logout                      │
+  │ GET    /api/auth/me                        Current user                │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ DASHBOARD ────────────────────────────────────────────────────────────┐
+  │ GET    /api/dashboard/stats                Stats + charts              │
+  │ GET    /api/dashboard/recent-activity      Audit feed                  │
+  │ POST   /api/dashboard/refresh              Clear dashboard cache       │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ PRODUCTS ─────────────────────────────────────────────────────────────┐
+  │ GET    /api/products                       List all                    │
+  │ POST   /api/products                       Create                     │
+  │ GET    /api/products/{id}                  Show                       │
+  │ PUT    /api/products/{id}                  Update                     │
+  │ DELETE /api/products/{id}                  Soft delete                │
+  │ POST   /api/products/{id}/restore          Restore                    │
+  │ POST   /api/products/{id}/stock            Manual stock adjust         │
+  │ GET    /api/products/{id}/completed-processings  Available stock      │
+  │ POST   /api/products/{id}/distribute-stock      Distribute milled     │
+  │ GET    /api/products/{id}/cost-analysis         Cost breakdown        │
+  │ POST   /api/products/{id}/toggle-status         Active/inactive       │
+  │ GET    /api/stock-logs                     Stock movement history      │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ VARIETIES ────────────────────────────────────────────────────────────┐
+  │ GET    /api/varieties                      List all                    │
+  │ POST   /api/varieties                      Create                     │
+  │ GET    /api/varieties/{id}                 Show                       │
+  │ PUT    /api/varieties/{id}                 Update                     │
+  │ DELETE /api/varieties/{id}                 Soft delete                │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ SUPPLIERS ────────────────────────────────────────────────────────────┐
+  │ GET    /api/suppliers                      List all                    │
+  │ POST   /api/suppliers                      Create                     │
+  │ POST   /api/suppliers/check-email          Validate email unique       │
+  │ GET    /api/suppliers/{id}                 Show                       │
+  │ PUT    /api/suppliers/{id}                 Update                     │
+  │ DELETE /api/suppliers/{id}                 Soft delete                │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ CUSTOMERS ────────────────────────────────────────────────────────────┐
+  │ GET    /api/customers                      List all                    │
+  │ POST   /api/customers                      Create                     │
+  │ POST   /api/customers/check-email          Validate email unique       │
+  │ GET    /api/customers/{id}                 Show                       │
+  │ PUT    /api/customers/{id}                 Update                     │
+  │ DELETE /api/customers/{id}                 Soft delete                │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ PROCUREMENTS ─────────────────────────────────────────────────────────┐
+  │ GET    /api/procurements                   List all                    │
+  │ GET    /api/procurements/statistics        Counts & totals             │
+  │ POST   /api/procurements                   Create                     │
+  │ GET    /api/procurements/{id}              Show                       │
+  │ PUT    /api/procurements/{id}              Update                     │
+  │ DELETE /api/procurements/{id}              Soft delete                │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ PROCUREMENT BATCHES ──────────────────────────────────────────────────┐
+  │ GET    /api/procurement-batches            List all                    │
+  │ GET    /api/procurement-batches/open       Open batches only           │
+  │ POST   /api/procurement-batches            Create                     │
+  │ GET    /api/procurement-batches/{id}       Show                       │
+  │ PUT    /api/procurement-batches/{id}       Update                     │
+  │ DELETE /api/procurement-batches/{id}       Delete                     │
+  │ POST   /api/procurement-batches/{batchId}/assign/{procurementId}      │
+  │ DELETE /api/procurement-batches/remove-procurement/{procurementId}    │
+  │ GET    /api/procurement-batches/{batchId}/drying-distribution         │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ DRYING PROCESSES ─────────────────────────────────────────────────────┐
+  │ GET    /api/drying-processes               List all                    │
+  │ GET    /api/drying-processes/statistics    Counts & totals             │
+  │ POST   /api/drying-processes               Create                     │
+  │ GET    /api/drying-processes/{id}          Show                       │
+  │ PUT    /api/drying-processes/{id}          Update                     │
+  │ POST   /api/drying-processes/{id}/increment-day   +1 day              │
+  │ POST   /api/drying-processes/{id}/mark-dried      Mark done           │
+  │ POST   /api/drying-processes/{id}/postpone        Pause               │
+  │ DELETE /api/drying-processes/{id}          Delete (if no output)       │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ PROCESSINGS ──────────────────────────────────────────────────────────┐
+  │ GET    /api/processings                    List all                    │
+  │ GET    /api/processings/active             Active only                 │
+  │ GET    /api/processings/completed          Completed only              │
+  │ GET    /api/processings/statistics         Counts & totals             │
+  │ POST   /api/processings                    Create                     │
+  │ GET    /api/processings/{id}               Show                       │
+  │ PUT    /api/processings/{id}               Update                     │
+  │ POST   /api/processings/{id}/process       Start milling              │
+  │ POST   /api/processings/{id}/complete      Complete with output       │
+  │ POST   /api/processings/{id}/return-to-processing  Revert             │
+  │ DELETE /api/processings/{id}               Delete (if no stock out)   │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ SALES ────────────────────────────────────────────────────────────────┐
+  │ GET    /api/sales                          List all                    │
+  │ POST   /api/sales/order                    Create POS/order            │
+  │ POST   /api/sales/check-reference          Validate GCash ref unique   │
+  │ GET    /api/sales/stats                    Revenue & counts            │
+  │ GET    /api/sales/product-growth           Per-product growth (?period)│
+  │ GET    /api/sales/{id}                     Show                       │
+  │ POST   /api/sales/{id}/void               Void (needs SA password)    │
+  │ PUT    /api/sales/{id}/status              Change order status         │
+  │ POST   /api/sales/{id}/return              Request return              │
+  │ POST   /api/sales/{id}/return/accept       Accept return + pickup info │
+  │ POST   /api/sales/{id}/return/reject       Reject return               │
+  │ POST   /api/sales/{id}/return/complete     Mark returned (pickup done) │
+  │ POST   /api/sales/{id}/restock            Restock items selectively   │
+  │ POST   /api/sales/{id}/pay                Mark unpaid order as paid    │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ SALES PREDICTIONS ────────────────────────────────────────────────────┐
+  │ GET    /api/sales-predictions              Forecasts                   │
+  │ POST   /api/sales-predictions/refresh      Recalculate                 │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ DRIVERS ──────────────────────────────────────────────────────────────┐
+  │ GET    /api/drivers                        List all                    │
+  │ GET    /api/drivers/statistics             Counts                     │
+  │ POST   /api/drivers                        Create                     │
+  │ GET    /api/drivers/{id}                   Show                       │
+  │ PUT    /api/drivers/{id}                   Update                     │
+  │ DELETE /api/drivers/{id}                   Soft delete                │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ DELIVERIES ───────────────────────────────────────────────────────────┐
+  │ GET    /api/deliveries                     List all                    │
+  │ GET    /api/deliveries/statistics          Counts                     │
+  │ POST   /api/deliveries                     Create assignment           │
+  │ GET    /api/deliveries/driver/{driverId}   By driver                  │
+  │ GET    /api/deliveries/{id}                Show                       │
+  │ PUT    /api/deliveries/{id}                Update                     │
+  │ POST   /api/deliveries/{id}/status         Change status              │
+  │ DELETE /api/deliveries/{id}                Delete                     │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ USERS ────────────────────────────────────────────────────────────────┐
+  │ GET    /api/users                          List all                    │
+  │ GET    /api/users/statistics               Counts                     │
+  │ POST   /api/users                          Create                     │
+  │ GET    /api/users/{id}                     Show                       │
+  │ PUT    /api/users/{id}                     Update                     │
+  │ DELETE /api/users/{id}                     Delete                     │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ ARCHIVES ─────────────────────────────────────────────────────────────┐
+  │ GET    /api/archives                       All soft-deleted records    │
+  │ GET    /api/archives/statistics            Counts per module           │
+  │ POST   /api/archives/{module}/{id}/restore Restore record             │
+  │ DELETE /api/archives/{module}/{id}         Permanent delete            │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ AUDIT TRAIL ──────────────────────────────────────────────────────────┐
+  │ GET    /api/audit-trails                   List all                    │
+  │ GET    /api/audit-trails/statistics        Counts                     │
+  │ GET    /api/audit-trails/{id}              Show details                │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ SETTINGS ─────────────────────────────────────────────────────────────┐
+  │ PUT    /api/appearance                     Update colors               │
+  │ PUT    /api/appearance/{key}               Update single color         │
+  │ POST   /api/appearance/reset               Reset to defaults           │
+  │ PUT    /api/business-settings              Update business info        │
+  │ POST   /api/business-settings/logo         Upload logo                 │
+  │ POST   /api/website-content/home           Save home page              │
+  │ POST   /api/website-content/about          Save about page             │
+  │ POST   /api/website-content/hero-image     Upload hero image           │
+  │ POST   /api/website-content/seed           Seed default content        │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ DATABASE ─────────────────────────────────────────────────────────────┐
+  │ GET    /api/database/export                Download SQL backup         │
+  │ GET    /api/database/info                  DB size & table info        │
+  │ GET    /api/database/export-csv            Download CSV ZIP export     │
+  │ POST   /api/database/import-csv            Import CSV file to table    │
+  └────────────────────────────────────────────────────────────────────────┘
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  12. FRONTEND PAGE MAP                                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  PUBLIC PAGES (no login required):
+  ─────────────────────────────────
+  /                   Home page — hero, features, products, about, CTA
+  /about              About page — story, mission, values, team
+  /products           Products catalog — grid with variety filter
+  /contact            Contact page — form, map, business info
+
+  SUPER ADMIN / ADMIN PAGES:
+  ──────────────────────────
+  /superadmin/dashboard        Dashboard — stats, charts, pipeline
+  /superadmin/procurement      Procurement management + batches
+  /superadmin/drying           Drying process management
+  /superadmin/processing       Processing/milling management
+  /superadmin/products         Product list + CRUD
+  /superadmin/products/varieties   Variety management
+  /superadmin/products/inventory   Stock logs + cost details
+  /superadmin/sales            Sales history + analytics
+  /superadmin/orders           Order management + delivery tabs
+  /superadmin/partners         Partner overview
+  /superadmin/partners/supplier    Supplier CRUD
+  /superadmin/partners/customer    Customer CRUD
+  /superadmin/staff-management     User/staff CRUD
+  /superadmin/settings         All settings tabs
+  /superadmin/pos              Point of Sale
+
+  (Admin has identical pages under /admin/*)
+
+  STAFF PAGES:
+  ────────────
+  /staff/dashboard     Staff dashboard (mock)
+  /staff/profile       Staff profile (mock)
+  /staff/pos           Point of Sale (live)
+
+  CLIENT PAGES:
+  ─────────────
+  /client/dashboard    Client overview (mock)
+  /client/shop         Browse & buy products (mock)
+  /client/orders       Order history (mock)
+  /client/cart         Shopping cart (mock)
+  /client/profile      Client profile (mock)
+  /client/settings     Client settings (mock)
+
+  DRIVER PAGES:
+  ─────────────
+  /driver/dashboard    Driver overview (mock)
+  /driver/deliveries   Delivery list (mock)
+  /driver/profile      Driver profile (mock)
+  /driver/settings     Driver settings (mock)
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  13. REUSABLE COMPONENT LIBRARY                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  ┌─ DATA DISPLAY ─────────────────────────────────────────────────────────┐
+  │ DataTable      — Searchable/sortable/paginated table with row select  │
+  │ LineChart      — Recharts line chart with toggleable legend            │
+  │ BarChart       — Recharts bar chart with toggleable legend             │
+  │ StatCard       — Dashboard stat with icon, value, trend arrow          │
+  │ Badge          — Colored label (for statuses)                          │
+  │ Skeleton       — Loading placeholder animation                        │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ FORMS & INPUT ────────────────────────────────────────────────────────┐
+  │ FormModal      — Modal wrapper with form, submit/cancel buttons       │
+  │ ConfirmDialog  — Yes/No confirmation popup                            │
+  │ Toast          — Auto-dismiss notification (success/error/warning)    │
+  │ EmptyState     — "No data" placeholder with icon and action button    │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ LAYOUT ───────────────────────────────────────────────────────────────┐
+  │ PageHeader     — Page title + breadcrumbs + action buttons            │
+  │ Sidebar        — Collapsible nav sidebar (admin)                      │
+  │ Header         — Top bar with search, notifications, user menu        │
+  │ Footer         — Public site footer                                   │
+  │ BottomNav      — Mobile bottom navigation                             │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ AUTH ─────────────────────────────────────────────────────────────────┐
+  │ ProtectedRoute — Checks auth + role before rendering children         │
+  │ SuperAdminRoute— Restricts to super_admin only                        │
+  └────────────────────────────────────────────────────────────────────────┘
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  14. CACHING & PERFORMANCE                                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  BACKEND CACHING:
+  ────────────────
+  - File-based cache (storage/framework/cache/)
+  - 5-minute TTL for all data queries
+  - Cache keys per module:
+      products_all, varieties_all, suppliers_all, customers_all,
+      procurements_all, drying_processes_all, processings_all,
+      procurement_batches_all, sales_all, stock_logs_all,
+      drivers_all, deliveries_all, dashboard_stats_*, etc.
+
+  - "INVALIDATED ON WRITE" means:
+      Every time you CREATE, UPDATE, or DELETE something in a module,
+      the system automatically deletes that module's cached data
+      (Cache::forget) so the next API request fetches FRESH data
+      from the database instead of serving old/stale data.
+
+      Example: You add a new procurement → system does
+      Cache::forget('procurements_all') → next time the Procurement
+      page loads, it queries the DB directly and gets the new entry.
+
+      Without this, you'd add a procurement but the list would still
+      show old data for up to 5 minutes until the cache expires.
+
+  - Cross-module invalidation also happens:
+      Creating a drying process → clears drying, procurement, AND
+      batch caches (because procurement status changes too)
+
+  FRONTEND CACHING:
+  ─────────────────
+  - TWO layers: in-memory Map + localStorage
+  - Memory: instant access, cleared on page refresh
+  - localStorage: survives page refresh, prefix 'kjp_cache_'
+  - Stale-while-revalidate: serve stale data instantly, refresh in background
+  - Stale threshold: 10 seconds
+  - Max TTL: 5 minutes
+  - Auto-pruning: clears oldest entries when localStorage is full
+  - Cache invalidation on mutations via useMutation hook
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  15. END-TO-END EXAMPLE: FROM PURCHASE TO PROFIT                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  Let's trace a real scenario through the entire system:
+
+  STEP 1: PROCURE
+  ───────────────
+  Admin goes to Procurement page, clicks "Add Procurement"
+  → Selects Supplier: "Farmer Juan"
+  → Selects Variety: "Dinorado"
+  → Enters: 4000 kg, 800 sacks, ₱10/kg
+  → System creates:
+      procurements: { supplier_id: 1, variety_id: 1, quantity_kg: 4000,
+                      sacks: 800, price_per_kg: 10, total_cost: 40000,
+                      status: 'Pending' }
+  → Total Cost: ₱40,000
+
+  STEP 2: CREATE BATCH (optional)
+  ──────────────────────────────
+  Admin creates Procurement Batch "BATCH-20260303-001" for Dinorado
+  → Assigns the procurement to the batch
+  → Batch tracks: total_sacks: 800, total_kg: 4000, remaining: 800/4000
+
+  STEP 3: DRY (paunti-unti / in smaller batches)
+  ───────────────────────────────────────────────
+  In reality, you often can't dry all 800 sacks at once because of
+  limited drying space. So you dry in smaller batches over time.
+
+  The system fully supports this — you can create MULTIPLE drying
+  processes from the same procurement or batch, each taking a portion
+  of the sacks.
+
+  ROUND 1 — Dry first 300 sacks:
+  Admin goes to Drying page, clicks "New Drying Process"
+  → Selects Batch "BATCH-20260303-001" (or individual procurement)
+  → Enters: 300 sacks, price ₱5/sack/day
+  → System creates:
+      drying_processes #1: { batch_id: 1, quantity_kg: 1500, sacks: 300,
+                             price: 5, days: 0, status: 'Drying' }
+      drying_batch_procurements: { drying_process_id: 1,
+                                    procurement_id: 1,
+                                    sacks_taken: 300,
+                                    quantity_kg: 1500 }
+  → Batch remaining: 800→500 sacks, 4000→2500 kg
+
+  Admin increments days:
+  → Day 1: total_price = 300 × 5 × 1 = ₱1,500
+  → Day 2: total_price = 300 × 5 × 2 = ₱3,000
+  → Day 3: Clicks "Mark as Dried"
+     → total_price = 300 × 5 × 3 = ₱4,500
+     → status → 'Dried'
+     → Procurement status stays 'Drying' (still has undried sacks)
+
+  ROUND 2 — Dry next 300 sacks (while round 1 goes to processing):
+  Admin creates another drying process from the same batch
+  → Enters: 300 sacks
+  → System creates:
+      drying_processes #2: { batch_id: 1, quantity_kg: 1500, sacks: 300,
+                             price: 5, days: 0, status: 'Drying' }
+  → Batch remaining: 500→200 sacks, 2500→1000 kg
+
+  ... increment days, mark as dried → total_price = ₱4,500
+
+  ROUND 3 — Dry remaining 200 sacks:
+  → drying_processes #3: { sacks: 200, quantity_kg: 1000 }
+  → Batch remaining: 200→0 sacks, 1000→0 kg
+  → NOW procurement status → 'Drying' (all sacks allocated)
+  → When marked dried → procurement status → 'Dried'
+  → Drying cost = 200 × 5 × 3 = ₱3,000
+
+  TOTAL DRYING COST: ₱4,500 + ₱4,500 + ₱3,000 = ₱12,000
+  (Same total as drying all at once, but spread across 3 rounds)
+
+  WHY THIS MATTERS:
+  - You can start processing Round 1's dried rice while Round 2 is
+    still drying — no need to wait for everything to finish
+  - Each drying process tracks its own days/cost independently
+  - The batch tracks remaining sacks so you always know what's left
+  - Cost tracing works correctly across multiple drying rounds
+
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+
+  NOTE: You CAN also dry all at once if you have enough space.
+  Just enter all 800 sacks in one drying process — the system
+  handles both approaches.
+
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+
+  STEP 4: MILL (Process) — can also pull from multiple drying sources
+  ───────────────────────────────────────────────────────────────────
+  Admin goes to Processing page, clicks "New Processing"
+  → Can select ONE or MULTIPLE dried drying processes as sources
+  → Example: select Drying #1 (1500 kg available) + Drying #2 (1500 kg)
+  → Enters: input_kg = 2800 (taking from both sources)
+  → System PROPORTIONALLY splits across sources:
+      From Drying #1: 1400 kg (50% of 2800)
+      From Drying #2: 1400 kg (50% of 2800)
+  → Creates:
+      processings: { input_kg: 2800, status: 'Pending' }
+      processing_drying_sources: [
+        { processing_id: 1, drying_process_id: 1, quantity_kg: 1400 },
+        { processing_id: 1, drying_process_id: 2, quantity_kg: 1400 }
+      ]
+  → Drying #1: quantity_out = 1400 (100 kg still available)
+  → Drying #2: quantity_out = 1400 (100 kg still available)
+
+  Admin clicks "Start Processing" → status → 'Processing'
+  Admin clicks "Complete" → enters output_kg = 2100
+  → husk_kg = 2800 - 2100 = 700
+  → yield_percent = (2100 / 2800) × 100 = 75%
+  → status → 'Completed'
+  → 2100 kg of milled Dinorado rice available for distribution
+
+  STEP 5: DISTRIBUTE TO PRODUCTS
+  ──────────────────────────────
+  Admin goes to Inventory, opens product "Dinorado 5kg" (weight: 5kg)
+  → Clicks "Distribute Stock"
+  → Sees Processing #1: 2100 kg available
+  → Enters: take 2000 kg from Processing #1
+  → System calculates:
+      total_units = floor(2000 / 5) = 400 units
+      excess_kg = 2000 - (400 × 5) = 0 kg (no excess)
+  → Product stocks: 0 → 400
+  → Processing stock_out: 0 → 2000 (100 kg still available)
+
+  COST TRACE (system traces backward through the chain):
+      procurement_cost = (2000/4000) × ₱40,000 = ₱20,000
+      drying_cost      = proportional share of ₱4,500 + ₱4,500 = ₱6,000
+                         (based on kg taken from each drying source)
+      total_cost       = ₱20,000 + ₱6,000 = ₱26,000
+      cost_per_unit    = ₱26,000 / 400 = ₱65.00
+      selling_price    = ₱85.00 (product price)
+      profit_per_unit  = ₱85 - ₱65 = ₱20.00
+      profit_margin    = (20 / 85) × 100 = 23.5%
+
+  → StockLog created with all these cost fields
+
+  STEP 6: SELL (POS)
+  ─────────────────
+  Staff opens POS, scans/adds "Dinorado 5kg" × 10
+  → Subtotal: 10 × ₱85 = ₱850
+  → Customer pays ₱1000 cash
+  → Change: ₱150
+  → System creates:
+      sales: { transaction_id: 'TXN-20260303-001', total: 850,
+               amount_tendered: 1000, change_amount: 150,
+               payment_method: 'cash', status: 'completed' }
+      sale_items: { product_id: X, quantity: 10, unit_price: 85,
+                    subtotal: 850 }
+      stock_logs: { product_id: X, type: 'out', quantity_change: -10,
+                    source_type: 'sale' }
+  → Product stocks: 400 → 390
+
+  PROFIT on this sale:
+      Revenue:  10 × ₱85 = ₱850
+      Cost:     10 × ₱65 = ₱650
+      Profit:   ₱200 (23.5% margin)
+
+  The dashboard immediately reflects this in revenue charts, top products,
+  and inventory counts.
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  15B. SCENARIO 2: TWO BATCHES, SAME VARIETY, DIFFERENT PRICES (PRICE HIKE)║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  Situation: You buy Dinorado from the same supplier twice, but palay
+  prices went up between purchases. Now you have 2 batches at different
+  costs flowing through the system into the SAME product.
+
+  ─────────────────────────────────────────────────────────────────────────
+  STEP 1: PROCURE — Two purchases at different prices
+  ─────────────────────────────────────────────────────────────────────────
+
+  PURCHASE A (before price hike):
+  → Supplier: "Farmer Juan", Variety: "Dinorado"
+  → 500 sacks, 2500 kg, ₱10/kg
+  → Procurement #1: total_cost = 2500 × 10 = ₱25,000
+
+  PURCHASE B (after price hike, 2 weeks later):
+  → Same supplier, same variety
+  → 500 sacks, 2500 kg, ₱14/kg  (40% increase!)
+  → Procurement #2: total_cost = 2500 × 14 = ₱35,000
+
+  You can put them in ONE batch or TWO separate batches:
+
+  Option A — SAME BATCH:
+    Batch "BATCH-DINORADO-001"
+    → Assign Procurement #1 and #2 to the same batch
+    → Batch totals: 1000 sacks, 5000 kg
+
+  Option B — SEPARATE BATCHES (recommended for clearer cost tracking):
+    Batch "BATCH-DINORADO-001" → Procurement #1 (₱10/kg)
+    Batch "BATCH-DINORADO-002" → Procurement #2 (₱14/kg)
+
+  For this example, we'll use SEPARATE BATCHES to show how costs
+  stay distinct through the pipeline.
+
+
+  ─────────────────────────────────────────────────────────────────────────
+  STEP 2: DRY — Each batch dried separately
+  ─────────────────────────────────────────────────────────────────────────
+
+  DRYING #1 (from Batch 1 — cheap rice):
+  → 500 sacks, ₱5/sack/day, dried for 3 days
+  → Drying cost = 500 × 5 × 3 = ₱7,500
+
+  DRYING #2 (from Batch 2 — expensive rice):
+  → 500 sacks, ₱5/sack/day, dried for 2 days (summer, faster drying)
+  → Drying cost = 500 × 5 × 2 = ₱5,000
+
+  Both marked as "Dried" when done.
+
+  COST SO FAR:
+  ┌────────────────┬───────────────┬──────────────┬───────────────┐
+  │                │ Procurement   │ Drying       │ Total So Far  │
+  ├────────────────┼───────────────┼──────────────┼───────────────┤
+  │ Batch 1 (cheap)│ ₱25,000      │ ₱7,500       │ ₱32,500       │
+  │ Batch 2 (pricey│ ₱35,000      │ ₱5,000       │ ₱40,000       │
+  ├────────────────┼───────────────┼──────────────┼───────────────┤
+  │ TOTAL          │ ₱60,000      │ ₱12,500      │ ₱72,500       │
+  └────────────────┴───────────────┴──────────────┴───────────────┘
+
+
+  ─────────────────────────────────────────────────────────────────────────
+  STEP 3: MILL — Processing can pull from one or both drying sources
+  ─────────────────────────────────────────────────────────────────────────
+
+  You have two options here:
+
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  OPTION A: Separate processings (keeps costs 100% distinct)
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+
+  Processing #1: Input from Drying #1 only → 2400 kg input
+  → Output: 1800 kg milled (75% yield)
+  → Cost per kg of milled rice:
+      Procurement: (2400/2500) × ₱25,000 = ₱24,000
+      Drying:      (2400/2500) × ₱7,500  = ₱7,200
+      Total cost:  ₱31,200 for 1800 kg
+      Cost/kg:     ₱31,200 ÷ 1800 = ₱17.33/kg
+
+  Processing #2: Input from Drying #2 only → 2400 kg input
+  → Output: 1800 kg milled (75% yield)
+  → Cost per kg of milled rice:
+      Procurement: (2400/2500) × ₱35,000 = ₱33,600
+      Drying:      (2400/2500) × ₱5,000  = ₱4,800
+      Total cost:  ₱38,400 for 1800 kg
+      Cost/kg:     ₱38,400 ÷ 1800 = ₱21.33/kg
+
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  OPTION B: Mixed processing (blends the costs — WEIGHTED AVERAGE)
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+
+  Processing #3: Input from BOTH Drying #1 AND Drying #2
+  → Take 1500 kg from Drying #1 + 1500 kg from Drying #2 = 3000 kg
+  → System proportionally splits: 50% from each source
+  → Output: 2250 kg milled (75% yield)
+
+  → Cost trace goes through EACH source separately, then combines:
+
+      FROM DRYING #1 (1500 kg, cheap rice):
+        Procurement share: (1500/2500) × ₱25,000 = ₱15,000
+        Drying share:      (1500/2500) × ₱7,500  = ₱4,500
+        Subtotal: ₱19,500
+
+      FROM DRYING #2 (1500 kg, expensive rice):
+        Procurement share: (1500/2500) × ₱35,000 = ₱21,000
+        Drying share:      (1500/2500) × ₱5,000  = ₱3,000
+        Subtotal: ₱24,000
+
+      COMBINED:
+        Total procurement cost: ₱15,000 + ₱21,000 = ₱36,000
+        Total drying cost:      ₱4,500 + ₱3,000   = ₱7,500
+        Grand total cost:       ₱43,500 for 2250 kg
+        Blended cost/kg:        ₱43,500 ÷ 2250 = ₱19.33/kg
+
+  The blended cost (₱19.33) falls BETWEEN the cheap (₱17.33) and
+  expensive (₱21.33) rates — weighted by how much you took from each.
+
+
+  ─────────────────────────────────────────────────────────────────────────
+  STEP 4: DISTRIBUTE — Different cost per distribution batch
+  ─────────────────────────────────────────────────────────────────────────
+
+  Product: "Dinorado 5kg" (weight: 5kg, selling price: ₱85)
+
+  IF USING OPTION A (separate processings):
+  ─────────────────────────────────────────
+
+  Distribution 1: Take 1500 kg from Processing #1 (cheap batch)
+  → Units: floor(1500 / 5) = 300 bags
+  → Cost per unit: (1500/1800) × ₱31,200 / 300 = ₱86.67... wait
+     Let's recalculate properly:
+      Procurement cost: (1500/2500) × ₱25,000 = ₱15,000
+      Drying cost:      (1500/2500) × ₱7,500  = ₱4,500
+      Total cost:       ₱19,500
+      Cost per unit:    ₱19,500 / 300 = ₱65.00
+      Profit per unit:  ₱85 - ₱65 = ₱20.00
+      Profit margin:    23.5%  ✓ Good margin!
+
+  Distribution 2: Take 1500 kg from Processing #2 (expensive batch)
+  → Units: floor(1500 / 5) = 300 bags
+  → Cost trace:
+      Procurement cost: (1500/2500) × ₱35,000 = ₱21,000
+      Drying cost:      (1500/2500) × ₱5,000  = ₱3,000
+      Total cost:       ₱24,000
+      Cost per unit:    ₱24,000 / 300 = ₱80.00
+      Profit per unit:  ₱85 - ₱80 = ₱5.00
+      Profit margin:    5.9%   ⚠ Very low margin!
+
+  → Each distribution gets its OWN StockLog entry with its own costs
+  → In Inventory, you can double-click each stock-in row and see
+    the exact production chain and costs for THAT specific batch
+  → This immediately tells you the price hike destroyed your margin
+    on the second batch!
+
+  IF USING OPTION B (mixed processing):
+  ─────────────────────────────────────
+
+  Distribution 3: Take 2000 kg from Processing #3 (blended)
+  → Units: floor(2000 / 5) = 400 bags
+  → Cost trace (proportional to kg taken vs total output):
+      Total cost share: (2000/2250) × ₱43,500 = ₱38,667
+      Cost per unit:    ₱38,667 / 400 = ₱96.67... 
+      
+      Actually, let's be precise — the system traces per-source:
+        From Drying #1: (2000/2250) × ₱19,500 = ₱17,333
+        From Drying #2: (2000/2250) × ₱24,000 = ₱21,333
+        Total cost: ₱38,667
+        Cost per unit: ₱38,667 / 400 = ₱96.67
+
+      Wait — that can't be right if selling at ₱85. Let me redo with
+      realistic numbers.
+
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  REALISTIC FULL CALCULATION (corrected numbers):
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+
+  Product: "Dinorado 5kg" — selling price ₱85/bag
+
+  Distribute from Processing #1 (cheap batch only):
+  → Take 1000 kg → 200 bags
+  → Procurement cost share: (1000/2500) × ₱25,000 = ₱10,000
+  → Drying cost share:      (1000/2500) × ₱7,500  = ₱3,000
+  → Total cost:          ₱13,000
+  → Cost per bag:        ₱13,000 / 200 = ₱65.00
+  → Selling price:       ₱85.00
+  → Profit per bag:      ₱20.00
+  → Profit margin:       23.5%  ✓
+
+  Distribute from Processing #2 (expensive batch only):
+  → Take 1000 kg → 200 bags
+  → Procurement cost share: (1000/2500) × ₱35,000 = ₱14,000
+  → Drying cost share:      (1000/2500) × ₱5,000  = ₱2,000
+  → Total cost:          ₱16,000
+  → Cost per bag:        ₱16,000 / 200 = ₱80.00
+  → Selling price:       ₱85.00
+  → Profit per bag:      ₱5.00
+  → Profit margin:       5.9%   ⚠ Almost no margin!
+
+  Distribute from BLENDED processing (both sources):
+  → Take 2000 kg (1000 from each source) → 400 bags
+  → From cheap source:    ₱10,000 + ₱3,000 = ₱13,000
+  → From expensive source: ₱14,000 + ₱2,000 = ₱16,000
+  → Total cost:          ₱29,000
+  → Cost per bag:        ₱29,000 / 400 = ₱72.50  (weighted average)
+  → Selling price:       ₱85.00
+  → Profit per bag:      ₱12.50
+  → Profit margin:       14.7%  △ Okay margin
+
+
+  ─────────────────────────────────────────────────────────────────────────
+  WHAT THIS MEANS FOR THE BUSINESS:
+  ─────────────────────────────────────────────────────────────────────────
+
+  ┌────────────────────┬───────────┬────────────┬────────────┐
+  │ Source             │ Cost/Bag  │ Profit/Bag │ Margin     │
+  ├────────────────────┼───────────┼────────────┼────────────┤
+  │ Cheap batch only   │ ₱65.00   │ ₱20.00     │ 23.5% ✓   │
+  │ Expensive only     │ ₱80.00   │ ₱5.00      │ 5.9%  ⚠   │
+  │ Blended 50/50      │ ₱72.50   │ ₱12.50     │ 14.7% △   │
+  └────────────────────┴───────────┴────────────┴────────────┘
+
+  KEY TAKEAWAYS:
+  1. The system tracks costs PER DISTRIBUTION, not averaged across
+     all stock — so you can see EXACTLY which batch is profitable
+     and which isn't.
+
+  2. You can view this in the Inventory page by double-clicking any
+     stock-in row → Cost Record Detail Modal shows the full chain.
+
+  3. The Cost Analysis on the Product page shows overall averages
+     across all distributions for that product.
+
+  4. If the expensive batch margin is too low, you know you need to
+     either RAISE the selling price or absorb it by blending with
+     the cheaper batch.
+
+  5. Each StockLog entry is independent — mixing batches in processing
+     blends costs, keeping them separate preserves cost clarity.
+
+  RECOMMENDATION:
+  If you want maximum visibility into which procurement is profitable,
+  keep batches and processings SEPARATE. If you want to smooth out
+  the price impact, BLEND them in processing.
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  16. FILE STRUCTURE QUICK REFERENCE                                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  BACKEND (laravel_backend/):
+  ───────────────────────────
+  routes/
+    api.php                     ← All API endpoints defined here
+  app/
+    Http/Controllers/           ← 25 controllers (thin, call services)
+    Http/Resources/             ← 15 API resources (format JSON output)
+    Http/Requests/              ← 4 form requests (validation rules)
+    Http/Middleware/             ← 2 custom middleware
+    Models/                     ← 10 Eloquent models
+    Services/                   ← 7 service classes (business logic)
+    Traits/                     ← 3 traits (ApiResponse, AuditLogger, Cache)
+    Concerns/                   ← 2 concerns (validation rules)
+    Providers/                  ← 2 service providers
+  database/
+    migrations/                 ← 49 migration files (see DATABASE_SCHEMA.txt)
+    seeders/                    ← Database seeders
+  config/
+    cors.php                    ← CORS settings for React
+    sanctum.php                 ← Token auth config
+
+  FRONTEND (react_frontend/):
+  ───────────────────────────
+  src/
+    main.jsx                    ← App entry point
+    App.jsx                     ← Routes + providers
+    api/                        ← 14 API modules (one per resource)
+      apiClient.js              ← HTTP client with caching
+      config.js                 ← Base URL, endpoints, timeouts
+    context/                    ← 3 contexts (Auth, BusinessSettings, Theme)
+    hooks/                      ← Custom hooks (useDataFetch, useMutation)
+    layouts/                    ← 5 layouts (Main, Staff, Public, Client, Driver)
+    pages/                      ← 41 page components
+      public/                   ← 4 public pages
+      admin/                    ← 19 admin pages
+      staff/                    ← 2 staff pages
+      client/                   ← 6 client pages
+      driver/                   ← 4 driver pages
+      auth/                     ← 1 auth page
+    components/                 ← 31 reusable components
+      auth/                     ← Auth guards
+      common/                   ← Header, Footer, PageHeader
+      sidebar/                  ← Sidebar navigation
+      ui/                       ← DataTable, charts, modals, forms, etc.
+    styles/                     ← CSS, theme constants
+    assets/                     ← Images, icons
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  17. KEY BUSINESS RULES SUMMARY                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  1.  Stock only enters products through distributeStock (from processing)
+  2.  Stock only leaves products through sales/orders
+  3.  Product weight/variety cannot change while stock exists
+  4.  Voiding sales requires super admin password (for non-super-admin)
+  5.  Order stock is deducted at "processing" status, not at creation
+  6.  Drying processes cannot be deleted once rice is sent to processing
+  7.  Processing cannot be deleted/reverted once stock is distributed
+  8.  All costs trace back: product ← processing ← drying ← procurement
+  9.  Soft-deleted records go to Archives (restorable by super admin)
+  10. Every significant action is logged in the audit trail
+  11. Single active auth token per user (old tokens revoked on login)
+  12. Inactive users cannot log in
+  13. Cache invalidated on every write (5 min TTL, stale-while-revalidate)
+  14. Procurement → Drying: all sacks must be allocated before "Drying" status
+  15. Only completed/delivered sales count toward revenue metrics
+  16. Delivery address is required for delivery orders
+  17. Shipping fee is auto-calculated based on distance and business settings
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  18. SHIPPING & DELIVERY SYSTEM                                            ║
+║      (Distance-based pricing via OpenRouteService)                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  OVERVIEW:
+  ~~~~~~~~~
+  The system uses OpenRouteService (ORS) — a FREE, open-source geocoding
+  and routing API — to calculate delivery distances and shipping fees.
+  No credit card or billing account is needed (unlike Google Maps).
+
+  ORS account:  https://account.heigit.org  (sign up for a free API key)
+  API docs:     https://openrouteservice.org/dev/#/api-docs
+
+
+  SERVICE USED:       OpenRouteService (openrouteservice.org)
+  ─────────────────────────────────────────────────────────────────
+  WHY NOT GOOGLE MAPS? Google Maps requires a billing account with
+  a credit card. ORS is completely free and open-source.
+
+
+  API KEY LOCATION:
+  ~~~~~~~~~~~~~~~~~
+  react_frontend/src/api/config.js
+    → ORS_API_KEY = '...'    (your API key from account.heigit.org)
+    → ORS_BASE_URL = 'https://api.openrouteservice.org'
+
+
+  API HELPER FILE:
+  ~~~~~~~~~~~~~~~~
+  react_frontend/src/api/openRouteService.js
+
+  Contains these functions:
+  ┌───────────────────────────┬────────────────────────────────────────────┐
+  │ FUNCTION                  │ PURPOSE                                    │
+  ├───────────────────────────┼────────────────────────────────────────────┤
+  │ searchAddress(query)      │ Autocomplete — returns address suggestions │
+  │                           │ Limited to Philippines (boundary.country)  │
+  ├───────────────────────────┼────────────────────────────────────────────┤
+  │ debouncedSearchAddress()  │ Debounced version (400ms) for live typing  │
+  ├───────────────────────────┼────────────────────────────────────────────┤
+  │ geocodeAddress(address)   │ Convert an address string → { lat, lng }   │
+  ├───────────────────────────┼────────────────────────────────────────────┤
+  │ calculateDistance(        │ Get actual driving distance & time between  │
+  │   fromLat, fromLng,       │ two coordinates using ORS driving-hgv      │
+  │   toLat, toLng)           │ (heavy goods vehicle / truck) routing.     │
+  │                           │ Falls back to haversine if routing fails.  │
+  ├───────────────────────────┼────────────────────────────────────────────┤
+  │ haversineDistance(        │ Straight-line distance fallback (no API    │
+  │   lat1, lng1, lat2, lng2) │ call needed). Used when ORS route fails.   │
+  └───────────────────────────┴────────────────────────────────────────────┘
+
+
+  HOW THE DELIVERY FLOW WORKS IN POS:
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  1. Staff/Admin toggles "For Delivery" in the cart sidebar
+     → Only the toggle is in the cart (no address inputs there)
+
+  2. When placing the order, the Customer Modal opens
+     → If "For Delivery" is ON, a Delivery Address section appears
+     → The address is AUTO-FILLED from the selected customer's
+        saved address in the database
+     → If no address saved, the field is blank (user must type one)
+     → Address field has ORS autocomplete (live suggestions)
+
+  3. User types or edits the address → selects a suggestion
+     → System auto-geocodes the selected address (lat/lng)
+     → System auto-calculates truck driving distance from
+        the warehouse to the delivery address
+     → Distance (km) and estimated drive time are shown
+     → Shipping fee is calculated and shown with a FULL BREAKDOWN
+
+  4. If address is empty when "For Delivery" is on:
+     → Order CANNOT proceed — error: "Delivery address is required"
+
+  5. On "Confirm Customer", if distance hasn't been calculated yet:
+     → System automatically geocodes the address and calculates
+        distance before opening the Payment Modal
+
+
+  SHIPPING SETTINGS (Admin → Settings → General → Shipping & Delivery):
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  ┌──────────────────────────┬──────────────────────────────────────────────┐
+  │ SETTING                  │ MEANING                                      │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ warehouse_address        │ The origin address for distance calculation   │
+  │                          │ (geocoded on app load to get lat/lng)        │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ shipping_base_km         │ Base distance unit in km (e.g., 5)           │
+  │                          │ Used as the "per trip" divisor               │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ shipping_rate_per_sack   │ Fee per sack per trip (e.g., ₱10)            │
+  │                          │ Charged per base-km "trip" chunk              │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ shipping_rate_per_km     │ Additional flat fee per km (e.g., ₱5)        │
+  │                          │ Covers fuel/wear regardless of sack count    │
+  └──────────────────────────┴──────────────────────────────────────────────┘
+
+  These are stored in the business_settings table and managed through
+  BusinessSettingController.php → fetched by BusinessSettingsContext.jsx.
+
+
+  SHIPPING FEE FORMULA:
+  ~~~~~~~~~~~~~~~~~~~~~
+
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │                                                                        │
+  │  deliveryFee = sackBasedFee + kmBasedFee                               │
+  │                                                                        │
+  │  WHERE:                                                                │
+  │    trips        = ⌈ distance_km / shipping_base_km ⌉  (ceiling)       │
+  │    sackBasedFee = trips × shipping_rate_per_sack × totalSacks         │
+  │    kmBasedFee   = shipping_rate_per_km × distance_km                  │
+  │                                                                        │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  EXAMPLE CALCULATION:
+  ~~~~~~~~~~~~~~~~~~~~
+  Settings:
+    warehouse_address     = "KJP Ricemill, Apalit, Pampanga"
+    shipping_base_km      = 5
+    shipping_rate_per_sack = 10
+    shipping_rate_per_km   = 5
+
+  Order:
+    Customer address = "San Fernando, Pampanga"  (12.3 km away)
+    Total sacks      = 20
+
+  Calculation:
+    trips        = ⌈12.3 / 5⌉ = ⌈2.46⌉ = 3
+    sackBasedFee = 3 × ₱10 × 20 = ₱600.00
+    kmBasedFee   = ₱5 × 12.3    = ₱61.50
+    ─────────────────────────────────────
+    TOTAL SHIPPING FEE             = ₱661.50
+
+  The POS shows this breakdown:
+    "Sack fee: ⌈12.3/5⌉ × ₱10 × 20 sacks  →  ₱600.00"
+    "Distance fee: ₱5/km × 12.3 km         →  ₱61.50"
+    "Total Shipping                         →  ₱661.50"
+
+
+  DATABASE COLUMNS (sales table):
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ┌──────────────────┬──────────────┬──────────────────────────────────────┐
+  │ COLUMN           │ TYPE         │ PURPOSE                              │
+  ├──────────────────┼──────────────┼──────────────────────────────────────┤
+  │ delivery_fee     │ decimal(10,2)│ Final calculated shipping fee stored │
+  │ distance_km      │ decimal(8,2) │ Distance from warehouse to customer  │
+  │ delivery_address  │ text         │ Full text address for delivery       │
+  │ for_delivery     │ boolean      │ Whether order is for delivery        │
+  └──────────────────┴──────────────┴──────────────────────────────────────┘
+
+  Added by migration: 2026_03_03_000001_add_delivery_fee_to_sales_table
+
+
+  ROUTING TYPE:
+  ~~~~~~~~~~~~~
+  The system uses ORS "driving-hgv" (heavy goods vehicle / truck) profile
+  instead of regular car routing, since deliveries are done by delivery
+  trucks carrying sacks of rice. This gives more accurate distance/time
+  for commercial vehicles.
+
+  If the ORS truck routing API fails (rate limit, network error), the
+  system falls back to haversine (straight-line) distance with a 1.4×
+  road factor estimate — marked as "(est.)" in the UI.
+
+
+  ORS API ENDPOINTS USED:
+  ~~~~~~~~~~~~~~~~~~~~~~~
+  1. GET  /geocode/autocomplete  → Address search/autocomplete
+  2. GET  /geocode/search        → Geocode full address to lat/lng
+  3. POST /v2/directions/driving-hgv → Truck route distance & duration
+
+
+  FILES INVOLVED:
+  ~~~~~~~~~~~~~~~
+  Frontend:
+    react_frontend/src/api/openRouteService.js   ← ORS API helper functions
+    react_frontend/src/api/config.js             ← ORS_API_KEY, ORS_BASE_URL
+    react_frontend/src/context/BusinessSettingsContext.jsx ← shipping settings
+    react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx ← POS delivery UI
+    react_frontend/src/pages/admin/Settings/Settings.jsx ← Shipping settings UI
+
+  Backend:
+    laravel_backend/app/Models/Sale.php                ← delivery_fee, distance_km
+    laravel_backend/app/Http/Resources/SaleResource.php ← API response format
+    laravel_backend/app/Services/SaleService.php       ← Handles delivery fields
+    laravel_backend/app/Http/Controllers/SaleController.php ← Store/update sale
+    laravel_backend/app/Http/Controllers/BusinessSettingController.php ← Settings
+    laravel_backend/database/migrations/2026_03_03_*_add_delivery_fee_*.php

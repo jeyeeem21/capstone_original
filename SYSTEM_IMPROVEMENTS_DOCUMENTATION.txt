@@ -1,0 +1,709 @@
+================================================================================
+  KJP RICEMILL - SYSTEM IMPROVEMENTS DOCUMENTATION
+  Date: March 5, 2026 (Updated: March 10, 2026)
+================================================================================
+
+This document covers all improvements made to make the KJP Ricemill system
+production-ready: real-time data sync, error resilience, 404 handling,
+missing route fixes, and responsive design audit results.
+
+
+================================================================================
+1. REAL-TIME DATA SYNC (Visibility-Based Refetch)
+================================================================================
+
+PROBLEM:
+  When Super Admin makes changes (e.g. adds a procurement), and Admin is signed
+  in on another computer/browser, the Admin had to manually refresh to see the
+  updated data. This is not acceptable for production.
+
+SOLUTION:
+  Added automatic refetch-on-tab-focus to the useDataFetch hook.
+
+HOW IT WORKS:
+  - Every active useDataFetch hook registers itself with a global listener.
+  - When the user switches BACK to the browser tab (visibilitychange event)
+    or the browser window gains focus (focus event), ALL active hooks check
+    whether their cached data is older than 5 seconds.
+  - If data is stale (>5s old), a silent background network request fetches
+    fresh data automatically — no loading spinner, no user action needed.
+  - The 5-second threshold prevents unnecessary refetches if the user rapidly
+    switches between tabs.
+  - Cleanup: when a component unmounts, its refetch callback is removed from
+    the active hooks set — no memory leaks.
+
+FILE MODIFIED:
+  react_frontend/src/hooks/useDataFetch.js
+
+  Added:
+  - REFETCH_ON_FOCUS_STALE constant (5 seconds)
+  - activeHooks Set (tracks all mounted hooks' refetch callbacks)
+  - attachVisibilityListener() — one-time setup for visibilitychange + focus
+  - New useEffect inside useDataFetch that registers/deregisters the hook
+
+BEHAVIOR IN PRODUCTION:
+  - Super Admin adds a procurement on Computer A.
+  - Admin switches to their browser tab on Computer B.
+  - Data automatically refreshes within milliseconds of tab focus.
+  - Works for ALL pages that use useDataFetch (Dashboard, Procurement, Drying,
+    Processing, Products, Varieties, Inventory, Sales, Orders, Partners,
+    Supplier, Customer, StaffManagement, AuditTrail, Archives, Settings,
+    PointOfSale, Client Shop, Client Orders, Driver Deliveries, etc.)
+  - No WebSocket server or Pusher subscription needed — works with standard
+    HTTP and the existing Laravel API.
+
+
+================================================================================
+2. ERROR BOUNDARY (Modular Error Isolation)
+================================================================================
+
+PROBLEM:
+  If ONE page has a JavaScript error (e.g. a null reference, API format change,
+  or component crash), the entire React app would white-screen. All pages would
+  become inaccessible until refresh.
+
+SOLUTION:
+  Created a React Error Boundary component and wrapped EVERY route's page
+  component individually with it.
+
+HOW IT WORKS:
+  - ErrorBoundary is a class component (React requirement for error catching)
+    that implements componentDidCatch and getDerivedStateFromError.
+  - Each page route in App.jsx is wrapped: <ErrorBoundary><Dashboard /></ErrorBoundary>
+  - If a page throws an error, ONLY that page shows a fallback UI.
+  - All other pages, sidebar navigation, and the layout remain fully functional.
+  - The fallback UI shows:
+    * "Something went wrong" message
+    * "Try Again" button (resets error state, re-renders the component)
+    * "Go Back" button (navigates to previous page)
+    * "Home" button (navigates to home/login)
+    * In development: error details and component stack trace for debugging
+
+FILE CREATED:
+  react_frontend/src/components/ErrorBoundary.jsx
+
+FILE MODIFIED:
+  react_frontend/src/App.jsx
+    - Every <Route> element now wraps its page component in <ErrorBoundary>
+    - Both /superadmin/* and /admin/* routes wrapped
+    - /staff/*, /client/*, /driver/* routes wrapped
+    - Public routes (Home, About, Products, Contact) wrapped
+
+BEHAVIOR IN PRODUCTION:
+  - If the Procurement page has an error, user sees a friendly error screen
+    with recovery options. They can navigate to Dashboard, Products, or any
+    other page — everything else keeps working.
+  - If they click "Try Again", the Procurement page re-renders fresh.
+  - No data loss on other pages.
+
+
+================================================================================
+3. 404 NOT FOUND PAGE
+================================================================================
+
+PROBLEM:
+  Navigating to a non-existent URL (e.g. /admin/nonexistent) silently
+  redirected to "/" with no feedback. Users had no idea what happened.
+
+SOLUTION:
+  Created a proper 404 page and added catch-all routes.
+
+HOW IT WORKS:
+  - A NotFound component displays "404 - Page Not Found" with the attempted URL.
+  - Smart navigation: if authenticated, "Go to Dashboard" links to the user's
+    role-specific dashboard. If not authenticated, links to Home.
+  - "Go Back" button takes user to the previous page.
+  - Catch-all routes (<Route path="*">) added to:
+    * /superadmin/* (inside MainLayout — shows 404 within the admin interface)
+    * /admin/* (inside MainLayout)
+    * /staff/* (inside StaffLayout)
+    * /client/* (inside ClientLayout)
+    * /driver/* (inside DriverLayout)
+    * Global catch-all (top-level — for completely unknown paths)
+
+FILE CREATED:
+  react_frontend/src/pages/NotFound.jsx
+
+FILE MODIFIED:
+  react_frontend/src/App.jsx
+    - Added <Route path="*" element={<NotFound />} /> in each route group
+    - Changed global catch-all from <Navigate to="/" /> to <NotFound />
+
+
+================================================================================
+4. MISSING ROUTES FIXED: AUDIT TRAIL & ARCHIVES
+================================================================================
+
+PROBLEM:
+  AuditTrail and Archives pages existed as fully implemented components but
+  were NEVER connected to the routing or navigation. They were completely
+  unreachable in the system.
+
+FILES THAT ALREADY EXISTED (but were disconnected):
+  - react_frontend/src/pages/admin/AuditTrail/AuditTrail.jsx (256 lines)
+  - react_frontend/src/pages/admin/Archives/Archives.jsx (345 lines)
+  - Exported in react_frontend/src/pages/admin/index.js
+  - Exported in react_frontend/src/pages/index.js
+
+FIXES APPLIED:
+
+  a) App.jsx — Added routes:
+     - /superadmin/audit-trail → <AuditTrail />
+     - /superadmin/archives    → <Archives />
+     - /admin/audit-trail      → <AuditTrail />
+     - /admin/archives         → <Archives />
+     (Both wrapped in ErrorBoundary)
+
+  b) Sidebar.jsx — Added navigation menu items:
+     - "Audit Trail" with FileText icon (between Sales and Settings)
+     - "Archives" with Archive icon (between Audit Trail and Settings)
+
+  c) BottomNav.jsx — Added mobile navigation items:
+     - "Audit" (FileText icon)
+     - "Archives" (Archive icon)
+
+
+================================================================================
+5. RESPONSIVE DESIGN AUDIT RESULTS
+================================================================================
+
+All pages, components, and layouts were scanned for responsive design issues.
+
+OVERALL VERDICT: EXCELLENT — The system is production-ready for all screen sizes.
+
+DETAILED FINDINGS:
+
+  5a. LAYOUTS (ALL PASS)
+  ─────────────────────
+  - MainLayout: Sidebar slides in on mobile, Header with hamburger on tablet,
+    BottomNav on mobile (<md), footer hidden on mobile. pb-20 for bottom nav.
+  - StaffLayout: Same responsive patterns as MainLayout.
+  - ClientLayout: Navbar on desktop, BottomNav on mobile, responsive padding.
+  - DriverLayout: Same pattern as ClientLayout.
+  - PublicLayout: Hamburger menu on mobile, desktop nav hidden on small screens.
+
+  5b. DATA TABLES (PASS — EXCELLENT)
+  ──────────────────────────────────
+  - DataTable.jsx auto-switches from HTML table to card layout below lg (1024px)
+  - Desktop: Standard HTML table with overflow-x-auto
+  - Mobile/Tablet: Grid of cards (grid-cols-1 sm:grid-cols-2)
+  - Search/filter row: flex-col on mobile, flex-row on desktop
+
+  5c. MODALS (PASS — GOOD)
+  ────────────────────────
+  - Use w-full + max-w-* for sizing + p-4 overlay padding
+  - overflow-y-auto with maxHeight: calc(90vh - 140px) for scrolling
+  - Work well on all screen sizes
+
+  5d. SIDEBAR (PASS — EXCELLENT)
+  ─────────────────────────────
+  - Hidden off-screen on mobile, slides in with backdrop
+  - Desktop: always visible, collapsible (w-72 / w-20)
+
+  5e. ADMIN PAGES (ALL PASS)
+  ──────────────────────────
+  - Dashboard: grid-cols-1 sm:grid-cols-2 lg:grid-cols-4
+  - Procurement: Responsive grids, DataTable card view on mobile
+  - DryingProcess: Same responsive pattern
+  - Processing: Same responsive pattern
+  - Products: grid-cols-2 md:grid-cols-4, DataTable card view
+  - Varieties: Responsive grids
+  - Inventory: grid-cols-2 md:grid-cols-4, lg:grid-cols-3
+  - Sales: Responsive grids, image thumbnails sized appropriately
+  - Partners: Responsive grids
+  - Supplier/Customer: Responsive, overflow-x-auto on modal tables
+  - StaffManagement: Responsive grids
+  - AdminOrders: Responsive grids, proper image sizing
+  - Settings: Very well done — multiple responsive breakpoints
+  - AuditTrail: grid-cols-2 lg:grid-cols-4 (adequate for admin page)
+  - Archives: grid-cols-1 sm:grid-cols-3
+
+  5f. CLIENT PAGES (ALL PASS)
+  ───────────────────────────
+  - Shop: sm:grid-cols-2 lg:grid-cols-3, cart sidebar hidden on mobile
+  - Cart: lg:grid-cols-3, responsive padding
+  - Orders: grid-cols-2 sm:grid-cols-4, overflow-x-auto tabs
+
+  5g. MINOR NOTES (NON-BLOCKING)
+  ─────────────────────────────
+  - Some filter selects use min-w-[240px] — on screens <320px they could
+    overflow. This is negligible since admin pages already have sidebar and
+    padding that keep content well above 320px minimum.
+  - FormElements.jsx has no responsive breakpoint classes, but uses w-full
+    by default and relies on parent layout grids for responsiveness.
+  - AuditTrail stats use grid-cols-2 (no grid-cols-1 at smallest) — could
+    be cramped on very small phones (<375px) but still readable.
+  - These are all edge cases for extremely small screens and do not affect
+    normal phone/tablet/desktop usage.
+
+
+================================================================================
+6. FILE CHANGE SUMMARY
+================================================================================
+
+NEW FILES:
+  react_frontend/src/components/ErrorBoundary.jsx    — Error boundary component
+  react_frontend/src/pages/NotFound.jsx              — 404 page component
+
+MODIFIED FILES:
+  react_frontend/src/hooks/useDataFetch.js           — Visibility-based refetch
+  react_frontend/src/App.jsx                         — ErrorBoundary wrapping,
+                                                       AuditTrail/Archives routes,
+                                                       404 catch-all routes
+  react_frontend/src/components/sidebar/Sidebar.jsx  — Audit Trail & Archives
+                                                       sidebar menu items
+  react_frontend/src/components/common/BottomNav.jsx — Audit & Archives mobile
+                                                       bottom nav items
+
+
+================================================================================
+7. TESTING CHECKLIST
+================================================================================
+
+  [ ] Open 2 browsers — Super Admin in one, Admin in another
+  [ ] Add a procurement in Super Admin
+  [ ] Switch to Admin browser tab — data should auto-refresh (no manual reload)
+  [ ] Delete/archive a procurement in Super Admin
+  [ ] Switch to Admin — should reflect the change immediately
+  [ ] Navigate to /admin/nonexistent — should show 404 page
+  [ ] Navigate to /superadmin/audit-trail — should load Audit Trail page
+  [ ] Navigate to /superadmin/archives — should load Archives page
+  [ ] Check Audit Trail and Archives appear in sidebar nav
+  [ ] Check Audit Trail and Archives appear in mobile bottom nav
+  [ ] Test ErrorBoundary: temporarily break a page component, verify other
+      pages still work and the broken page shows friendly error UI
+  [ ] Test on mobile viewport — verify card layouts, sidebar, bottom nav
+  [ ] Test on tablet viewport — verify responsive grids
+
+================================================================================
+  END OF PREVIOUS DOCUMENTATION
+================================================================================
+
+
+What it is NOT: It's not WebSocket/Pusher push-based real-time where 
+changes appear on Admin's screen the exact second Super Admin clicks save 
+while Admin is already staring at the page. That would require a WebSocket server 
+(Laravel Echo + Pusher/Soketi), which is a much larger infrastructure change.
+
+
+================================================================================
+================================================================================
+  KJP RICEMILL - DARK MODE, ROLE-BASED ACCESS & UI IMPROVEMENTS
+  Date: March 2026 (Session 2)
+================================================================================
+================================================================================
+
+This document covers all improvements made for comprehensive dark mode support,
+role-based access control (RBAC), footer fixes, CSV export/import, archive
+button conditions, and Settings page enhancements.
+
+
+================================================================================
+6. COMPREHENSIVE DARK MODE FIX (System-Wide)
+================================================================================
+
+PROBLEM:
+  Many UI components, pages, and modals had hardcoded light-mode Tailwind classes
+  (bg-white, text-gray-800, bg-gray-50, etc.) without corresponding dark: variants.
+  In dark mode, text was invisible, backgrounds were blinding white, and the
+  overall experience was broken across most of the admin system.
+
+SCOPE OF FIX:
+  350+ individual dark mode issues fixed across 40+ files.
+
+FILES MODIFIED (Shared UI Components):
+  - FormElements.jsx: Added dark:bg-gray-700, dark:text-gray-100, 
+    dark:border-gray-600, dark:placeholder-gray-400 to FormInput, FormSelect,
+    FormTextarea normal/disabled/hint states. This single fix cascades to 
+    EVERY form and modal across the entire system.
+  - Modal.jsx (ConfirmModal): Added dark:bg-*-900/30 to icon backgrounds,
+    dark:text-gray-300 to message text.
+  - Card.jsx: Added dark:shadow-gray-900/30, dark:border-gray-700 to borders.
+  - DataTable.jsx: Added dark:bg-gray-600 to checkboxes, dark mode to reset 
+    date button.
+  - ActionButtons.jsx: Added dark:hover:bg-*-900/30 to all action button hovers.
+  - Button.jsx: Minor dark variants for outline states.
+  - StatusBadge.jsx, Skeleton.jsx, Tabs.jsx, Toast.jsx, Pagination.jsx,
+    LoginModal.jsx, BarChart.jsx, DonutChart.jsx, LineChart.jsx, DateFilter.jsx:
+    All received dark: variant classes.
+
+FILES MODIFIED (Admin Pages - all modals, tables, views, forms):
+  - Dashboard.jsx: Skeleton loaders, refresh button
+  - Products.jsx: Stats cards, view modal, close button
+  - Categories.jsx: Color picker, view modal, all text  
+  - Varieties.jsx: Color picker, view modal, all text
+  - Inventory.jsx: Stats cards, distribute modal, cost breakdowns, toggle 
+    switches, quantity inputs, view modal, restock form (~50 instances)
+  - Procurement.jsx: Custom form inputs, tabs, batch filter, all detail/view 
+    modals, close buttons, items list (~80+ instances - worst file)
+  - Processing.jsx: Stats cards, detail view, form labels
+  - DryingProcess.jsx: Batch filter, source tabs, form sections, detail view
+  - Sales.jsx: Status tabs, detail view, items table, receipt close button
+  - Orders.jsx: Status tabs, detail view, return/ship/pay modals, driver 
+    selection, quick payment amounts (~60+ instances)
+  - Partners.jsx, Supplier.jsx, Customer.jsx: Section headers
+  - StaffManagement.jsx, AdminAccounts.jsx: Position badges
+  - Archives.jsx, ArchiveDetailView.jsx, AuditTrail.jsx: All text/bg
+  - PredictiveAnalytics.jsx: Chart containers
+  - Settings.jsx: Information tab section headings (~20 instances), role 
+    permission lists, logo container, toggle switch, theme mode labels
+
+FILES MODIFIED (Layouts & Public Pages):
+  - ClientLayout.jsx, DriverLayout.jsx, PublicLayout.jsx, StaffLayout.jsx
+  - Home.jsx, About.jsx, Contact.jsx, PublicProducts.jsx
+  - BottomNav.jsx, Footer.jsx
+
+PATTERN APPLIED:
+  text-gray-800 → text-gray-800 dark:text-gray-100
+  text-gray-700 → text-gray-700 dark:text-gray-200
+  text-gray-600 → text-gray-600 dark:text-gray-300
+  text-gray-500 → text-gray-500 dark:text-gray-400
+  bg-white      → bg-white dark:bg-gray-700
+  bg-white/XX   → bg-white/XX dark:bg-gray-700/XX  
+  bg-gray-50    → bg-gray-50 dark:bg-gray-700/50
+  bg-gray-100   → bg-gray-100 dark:bg-gray-700
+  bg-gray-200   → bg-gray-200 dark:bg-gray-600
+  border-gray-200 → border-gray-200 dark:border-gray-600
+  border-gray-300 → border-gray-300 dark:border-gray-600
+  hover:bg-gray-50 → hover:bg-gray-50 dark:hover:bg-gray-600
+
+
+================================================================================
+7. ROLE-BASED ACCESS CONTROL (RBAC) — Admin vs Super Admin
+================================================================================
+
+PROBLEM:
+  - Admin users could access Audit Trail and Archives pages by direct URL
+  - Backend API had NO role-checking middleware — any authenticated user 
+    (including staff, clients, drivers) could call super-admin-only APIs
+  - Database backup, appearance settings, business settings, and website 
+    content APIs were unprotected
+
+SOLUTION:
+
+A. Frontend — Sidebar & Bottom Nav:
+   - Sidebar.jsx: Audit Trail and Archives menu items wrapped in 
+     {isSuperAdmin() && (...)} conditional
+   - BottomNav.jsx: Same isSuperAdmin() conditional using spread operator
+     for Audit and Archives items
+   
+B. Frontend — Route Protection:
+   - App.jsx: Removed audit-trail and archives Route definitions from 
+     /admin/* route group. These pages now ONLY exist under /superadmin/*
+   
+C. Backend — New Role Middleware:
+   CREATED: app/Http/Middleware/EnsureUserHasRole.php
+   - Checks request->user()->role against allowed roles
+   - Returns 403 Forbidden if role doesn't match
+   Registered in bootstrap/app.php as 'role' middleware alias
+
+D. Backend — Protected Routes (api.php):
+   Super Admin Only (role:super_admin middleware):
+   - PUT /api/appearance, PUT /api/appearance/{key}, POST /api/appearance/reset
+   - POST /api/website-content/home, POST /api/website-content/about
+   - POST /api/website-content/hero-image, POST /api/website-content/seed
+   - PUT /api/business-settings, POST /api/business-settings/logo
+   - GET /api/database/export, GET /api/database/info
+   - GET /api/database/export-csv, POST /api/database/import-csv
+   - ALL /api/archives/* routes
+   - ALL /api/audit-trails/* routes
+
+E. Settings Tab Access (was already correct):
+   Tabs with superAdminOnly: true are hidden from admin:
+   - General (business info), Appearance, Information, Data, Accounts,
+     Audit Trail, Archives
+
+ROLE ACCESS MATRIX:
+  ┌─────────────────────┬──────────┬───────┬───────┐
+  │ Feature             │ SuperAdm │ Admin │ Staff │
+  ├─────────────────────┼──────────┼───────┼───────┤
+  │ Dashboard           │    ✓     │   ✓   │   ✓   │
+  │ Procurement         │    ✓     │   ✓   │   ✗   │
+  │ Drying/Processing   │    ✓     │   ✓   │   ✗   │
+  │ Products/Inventory  │    ✓     │   ✓   │   ✗   │
+  │ POS                 │    ✓     │   ✓   │   ✓   │
+  │ Orders              │    ✓     │   ✓   │   ✗   │
+  │ Partners            │    ✓     │   ✓   │   ✗   │
+  │ Staff Management    │    ✓     │   ✓   │   ✗   │
+  │ Sales               │    ✓     │   ✓   │   ✗   │
+  │ Settings (Profile)  │    ✓     │   ✓   │   ✗   │
+  │ Settings (General)  │    ✓     │   ✗   │   ✗   │
+  │ Settings (Data)     │    ✓     │   ✗   │   ✗   │
+  │ Audit Trail         │    ✓     │   ✗   │   ✗   │
+  │ Archives            │    ✓     │   ✗   │   ✗   │
+  │ DB Backup/Export    │    ✓     │   ✗   │   ✗   │
+  │ Appearance Settings │    ✓     │   ✗   │   ✗   │
+  │ Business Settings   │    ✓     │   ✗   │   ✗   │
+  │ Website Content     │    ✓     │   ✗   │   ✗   │
+  └─────────────────────┴──────────┴───────┴───────┘
+
+
+================================================================================
+8. FOOTER QUICK LINKS FIX
+================================================================================
+
+PROBLEM:
+  Footer Quick Links pointed to admin-only routes (/inventory, /pos, 
+  /procurement, /dashboard) which are inaccessible from the public website.
+
+SOLUTION:
+  Updated Footer.jsx quick links to use valid public URLs:
+  - Inventory Management → /#features (anchors to home page features section)
+  - Products → /products (public products page)
+  - Sales & POS → /#features
+  - Procurement → /#features
+  - Reports & Analytics → /#features
+  
+  Added id="features" to the Features Section in Home.jsx for anchor navigation.
+
+
+================================================================================
+9. CSV EXPORT/IMPORT (from previous session)
+================================================================================
+
+IMPLEMENTATION:
+  Backend (DatabaseBackupController.php):
+  - exportCsv(): Creates ZIP with CSV per table (products, varieties, customers,
+    suppliers, procurements, processings, drying_processes, stock_logs, orders,
+    order_items, users). Uses PHP ZipArchive.
+  - importCsv(): Accepts table name + CSV file, validates table against 
+    whitelist, reads with fgetcsv(), inserts rows with DB::table()->insert()
+  
+  Frontend (Settings.jsx DataSection):
+  - SQL Backup button: Downloads .sql file via /database/export
+  - CSV Export button: Downloads .zip file via /database/export-csv
+  - CSV Import: Table selector dropdown + file upload via /database/import-csv
+  
+  Filenames:
+  - SQL: BusinessName_Month_Day_Year_backup.sql
+  - CSV: BusinessName_Month_Day_Year_csv_export.zip
+
+
+================================================================================
+10. ARCHIVE BUTTON CONDITIONAL HIDING (from previous session)
+================================================================================
+
+RULES:
+  - Inventory.jsx: Archive button hidden when row.stocks > 0
+  - Products.jsx: Archive button hidden when row.stocks > 0
+  - Varieties.jsx: Archive button hidden when row.products_count > 0
+
+IMPLEMENTATION:
+  onArchive prop uses ternary:
+  onArchive={isSuperAdmin() && (row.stocks || 0) === 0 
+    ? () => handleDelete(row) : undefined}
+  
+  When onArchive is undefined, the ActionButtons component doesn't render
+  the archive button at all.
+
+
+================================================================================
+11. DANGER ZONE REMOVAL (from previous session)
+================================================================================
+
+  Removed the Danger Zone section from Settings.jsx that allowed resetting
+  the system. This was deemed too risky for production.
+
+
+================================================================================
+  TESTING CHECKLIST
+================================================================================
+
+DARK MODE:
+  [ ] Toggle dark mode in Settings → Appearance
+  [ ] Check all form inputs have dark backgrounds (not white)
+  [ ] Check all modal text is readable (not dark-on-dark)
+  [ ] Check ConfirmModal (delete/archive) message text visible
+  [ ] Check DataTable headers, rows, checkboxes
+  [ ] Check all view/detail modals across pages
+  [ ] Check Settings Information tab section headings
+  [ ] Check Dashboard skeleton loaders during loading
+  [ ] Check all card borders and shadows
+
+ROLE ACCESS (Admin):
+  [ ] Login as admin role
+  [ ] Verify Audit Trail NOT in sidebar
+  [ ] Verify Archives NOT in sidebar
+  [ ] Verify Audit Trail NOT in bottom nav (mobile)
+  [ ] Navigate to /admin/audit-trail → should show 404
+  [ ] Navigate to /admin/archives → should show 404
+  [ ] Settings: Only Profile and Security tabs visible
+  [ ] API: Calling /api/archives should return 403
+
+ROLE ACCESS (Super Admin):
+  [ ] Login as super_admin role
+  [ ] Verify Audit Trail IS in sidebar
+  [ ] Verify Archives IS in sidebar
+  [ ] All Settings tabs accessible
+  [ ] API: /api/archives works normally
+
+FOOTER:
+  [ ] Check Quick Links: Inventory Management, Products, Sales & POS,
+      Procurement, Reports & Analytics
+  [ ] Products link goes to /products (public products page)
+  [ ] Other links go to /#features section on home page
+
+CSV:
+  [ ] SQL Backup downloads .sql file with business name in filename
+  [ ] CSV Export downloads .zip with business name in filename
+  [ ] CSV Import works with valid CSV file
+
+ARCHIVE BUTTONS:
+  [ ] Inventory: Archive button hidden when product has stocks > 0
+  [ ] Products: Archive button hidden when product has stocks > 0
+  [ ] Varieties: Archive button hidden when products_count > 0
+  [ ] Archive button shows when stocks/products_count = 0
+
+================================================================================
+  END OF PREVIOUS DOCUMENTATION
+================================================================================
+
+
+================================================================================
+================================================================================
+  KJP RICEMILL - LATEST SESSION IMPROVEMENTS (March 9-10, 2026)
+================================================================================
+================================================================================
+
+
+================================================================================
+12. PRODUCT IMAGE UPLOAD
+================================================================================
+
+PROBLEM:
+  Products had no image support. The products table was recreated earlier
+  without the original `image` column.
+
+SOLUTION:
+  Added full image upload support across the entire stack.
+
+BACKEND CHANGES:
+  - Migration: 2026_03_09_000002_add_image_to_products_table.php
+    → adds `image` varchar(255) nullable after `weight` column
+  - ProductController.store(): Handles FormData with $request->hasFile('image'),
+    stores in 'products' disk, saves path
+  - ProductController.update(): Replaces existing image if new one uploaded,
+    deletes old file from storage
+  - ProductResource: Returns `image` field with '/storage/' prefix for URL
+  - ProductService: createProduct/updateProduct accept `image` field
+  - Product model: `image` added to $fillable array
+
+FRONTEND CHANGES:
+  - Admin Products.jsx: Form uses FormData for file upload, includes file
+    picker with preview, handles both create and edit with image replacement
+
+PUBLIC PAGES:
+  - Home.jsx and Products.jsx: Product cards display product.image
+  - Uses useBusinessSettings() to get business logo as fallback
+  - When product has no image, business logo is shown instead
+
+
+================================================================================
+13. RESTOCK PER-ITEM QUANTITY
+================================================================================
+
+PROBLEM:
+  When voiding/returning a sale, stock could only be restocked in bulk.
+  No way to selectively restock individual items.
+
+SOLUTION:
+  - Migration: 2026_03_09_000001_add_restocked_to_sale_items_table.php
+    → adds `restocked` boolean (default false) to sale_items table
+  - SaleController.restockItems(): Accepts `items: [{id, quantity}]` array
+  - SaleService.restockItems(): For each item, validates against original
+    quantity, increments product stock, marks item as restocked, creates
+    stock_log entry
+  - Route: POST /api/sales/{id}/restock
+  - Frontend Orders.jsx: Modal shows checkboxes per sale item with quantity
+    inputs, validates against original quantities
+
+
+================================================================================
+14. PUBLIC PRODUCT CARD FIX (Field Mapping)
+================================================================================
+
+PROBLEM:
+  Public Home and Products pages showed blank product names, ₱0 prices, and
+  no variety tags. Cards only displayed the business logo fallback image.
+
+ROOT CAUSE:
+  API returns `product_name`, `variety_name`, `price`, `is_in_stock` but
+  frontend normalizers were reading `name`, `description`, `variety`, `inStock`
+  — all undefined from the API response.
+
+SOLUTION:
+  Updated normalizers in both pages:
+
+  Home.jsx (lines ~112-120):
+    name: p.product_name || p.name
+    description: variety_name + " — " + weight_formatted (synthesized)
+    tags: [variety_name] if no explicit tags
+    price: parseFloat(p.price) || 0
+
+  Products.jsx (lines ~74-86):
+    name: product.product_name || product.name
+    variety: product.variety_name || product.variety
+    description: variety_name + " — " + weight_formatted (synthesized)
+    inStock: product.is_in_stock ?? product.in_stock ?? true
+    tags: [variety_name] if no explicit tags
+
+
+================================================================================
+15. FOOTER QUICK LINKS — ROLE-BASED
+================================================================================
+
+PROBLEM:
+  Footer quick links pointed to `/#features` (public page anchors) even
+  for admin/staff users using the system. Links were useless for logged-in
+  staff navigating in MainLayout or StaffLayout.
+
+SOLUTION:
+  Footer.jsx now imports useAuth() and uses basePath/isStaff():
+
+  Staff users see:
+    - Point of Sale → /staff/pos
+    - My Profile → /staff/profile
+
+  Admin/SuperAdmin users see:
+    - Products → {basePath}/products
+    - Point of Sale → {basePath}/pos
+    - Orders → {basePath}/orders
+    - Procurement → {basePath}/procurement
+    - Sales → {basePath}/sales
+
+  Public layout (PublicLayout.jsx) has its own separate footer
+  with correct public links: /, /about, /products, /contact
+
+FILES MODIFIED:
+  react_frontend/src/components/common/Footer.jsx
+
+
+================================================================================
+16. VOID TRACKING (voided_by + authorized_by)
+================================================================================
+
+PROBLEM:
+  When a sale was voided, there was no record of who voided it or who
+  authorized the void.
+
+SOLUTION:
+  - Migration: 2026_03_08_220118_add_voided_by_to_sales_table.php
+    → adds `voided_by` (string nullable) and `authorized_by` (string nullable)
+  - SaleService.voidSale(): Records the current user as voided_by and
+    the authorizing super_admin as authorized_by
+  - Frontend Sales view modal: Shows voided_by and authorized_by info
+
+
+================================================================================
+17. DARK MODE FIXES (Navbar, Product Cards, Hover States)
+================================================================================
+
+  - Fixed navbar dark mode background color mismatch
+  - Fixed public product card dark mode styles
+  - Fixed Sales page close button hover in dark mode
+  - Fixed Sales tab dark mode hover states
+
+
+================================================================================
+  END OF DOCUMENTATION — Updated March 10, 2026
+================================================================================

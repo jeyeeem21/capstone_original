@@ -1,0 +1,255 @@
+================================================================================
+      SOFTWARE AND HARDWARE SPECIFICATIONS
+      KJP Rice Mill Management System
+      (kjpricemill.com)
+================================================================================
+
+
+================================================================================
+I. SOFTWARE SPECIFICATIONS
+================================================================================
+
+
+A. DEVELOPMENT SOFTWARE
+--------------------------------------------------------------------------------
+
+  Software                  | Version       | Purpose
+  --------------------------+---------------+-------------------------------------
+  Visual Studio Code        | Latest        | Primary code editor / IDE
+  Git                       | Latest        | Version control system
+  GitHub                    | N/A           | Remote repository hosting
+  Node.js                   | 18.x or later | JavaScript runtime for frontend
+  npm                       | 9.x or later  | Node package manager
+  PHP                       | 8.2+          | Backend programming language
+  Composer                  | 2.x           | PHP dependency manager
+  Laragon                   | 6.x           | Local development environment
+  MySQL / MariaDB           | 8.x / 10.x   | Relational database management
+  Vite                      | 7.2.4         | Frontend build tool / dev server
+  Postman / Thunder Client  | Latest        | API testing and debugging
+
+
+B. FRONTEND TECHNOLOGIES
+--------------------------------------------------------------------------------
+
+  Technology / Library      | Version       | Purpose
+  --------------------------+---------------+-------------------------------------
+  React                     | 19.2.0        | JavaScript UI library (SPA)
+  React Router DOM          | 7.13.0        | Client-side routing & navigation
+  Tailwind CSS              | 3.4.19        | Utility-first CSS framework
+  Axios                     | Latest        | HTTP client for API requests
+  Recharts                  | 3.7.0         | Data visualization / charts
+  Lucide React              | 0.563.0       | Icon library
+  Vite                      | 7.2.4         | Build tool & hot module replacement
+  PostCSS                   | Latest        | CSS post-processing
+  ESLint                    | Latest        | JavaScript/React code linting
+
+
+C. BACKEND TECHNOLOGIES
+--------------------------------------------------------------------------------
+
+  Technology / Library      | Version       | Purpose
+  --------------------------+---------------+-------------------------------------
+  Laravel                   | 12.0          | PHP web application framework
+  Laravel Sanctum           | 4.0           | API token-based authentication
+  Laravel Fortify           | 1.30          | Authentication scaffolding & 2FA
+  Eloquent ORM              | (Laravel)     | Object-relational mapping
+  Laravel Pint              | Latest        | PHP code style fixer / linter
+  PHPUnit                   | 11.5.3        | Backend unit & feature testing
+  FakerPHP                  | 1.23          | Test data generation
+
+
+D. DATABASE
+--------------------------------------------------------------------------------
+
+  Specification             | Detail
+  --------------------------+--------------------------------------------------
+  Database System           | MySQL 8.x / MariaDB 10.x
+  Character Set             | UTF-8MB4 (full Unicode support)
+  Collation                 | utf8mb4_unicode_ci
+  Total Tables              | 28
+  Key Features              | Foreign key constraints, indexing, soft deletes,
+                            | audit trail logging
+
+
+E. AUTHENTICATION & SECURITY SOFTWARE
+--------------------------------------------------------------------------------
+
+  Component                 | Detail
+  --------------------------+--------------------------------------------------
+  Auth Method               | Token-based API authentication (Laravel Sanctum)
+  Session Handling          | Laravel Session with database/file driver
+  Password Reset            | Laravel Fortify built-in reset flow
+  Email Verification        | Verification code system via SMTP
+  CORS Policy               | Configurable cross-origin resource sharing
+  Rate Limiting             | Throttle middleware on authentication endpoints
+  Access Control            | Role-based (super_admin, admin, staff, driver,
+                            | client) enforced via middleware
+
+
+F. MACHINE LEARNING / PREDICTIVE ANALYSIS
+--------------------------------------------------------------------------------
+
+  Component                 | Detail
+  --------------------------+--------------------------------------------------
+  Feature                   | Sales Forecasting & Demand Prediction
+  Regression Models Used    | Linear Regression, Polynomial Regression,
+                            | Ridge Regression, Lasso Regression,
+                            | Random Forest Regression,
+                            | Support Vector Regression (SVR)
+  Use Cases                 | Forecast future sales revenue, predict product
+                            | demand, estimate procurement needs, anticipate
+                            | processing output, predict drying durations
+
+
+G. DEPLOYMENT / HOSTING SOFTWARE
+--------------------------------------------------------------------------------
+
+  Component                 | Detail
+  --------------------------+--------------------------------------------------
+  Web Hosting               | Hostinger (Shared/VPS Hosting)
+  Web Server                | Apache / Nginx
+  Domain                    | kjpricemill.com
+  API Subdomain             | api.kjpricemill.com
+  SSL Certificate           | Let's Encrypt (HTTPS)
+  Deployment Method         | SSH + GitHub integration
+  Server OS                 | Linux (Ubuntu / CentOS)
+
+
+H. EXTERNAL SERVICES
+--------------------------------------------------------------------------------
+
+  Service                   | Purpose
+  --------------------------+--------------------------------------------------
+  SMTP (Mail)               | Email notifications, password reset, verification
+                            | (SendGrid, Mailgun, or AWS SES compatible)
+  Laravel Storage           | File/image storage (local disk, S3-ready)
+  GitHub                    | Source code repository & CI/CD integration
+
+
+I. OPERATING SYSTEM COMPATIBILITY
+--------------------------------------------------------------------------------
+
+  Platform                  | Supported OS
+  --------------------------+--------------------------------------------------
+  Development               | Windows 10/11, macOS, Linux (Ubuntu)
+  Server / Production       | Linux (Ubuntu 22.04+ / CentOS 8+)
+  Client / End-User         | Any OS with a modern web browser
+
+
+J. WEB BROWSER COMPATIBILITY
+--------------------------------------------------------------------------------
+
+  Browser                   | Minimum Version
+  --------------------------+--------------------------------------------------
+  Google Chrome             | 90+
+  Mozilla Firefox           | 90+
+  Microsoft Edge            | 90+
+  Safari                    | 14+
+  Opera                     | 76+
+  Mobile Browsers           | Chrome Mobile, Safari Mobile (latest)
+
+
+================================================================================
+II. HARDWARE SPECIFICATIONS
+================================================================================
+
+
+A. DEVELOPMENT MACHINE (Minimum Requirements)
+--------------------------------------------------------------------------------
+
+  Component                 | Minimum Specification
+  --------------------------+--------------------------------------------------
+  Processor                 | Intel Core i3 (8th Gen) / AMD Ryzen 3
+                            | or equivalent
+  RAM                       | 8 GB DDR4
+  Storage                   | 256 GB SSD
+  Display                   | 14-inch, 1366 x 768 resolution
+  Network                   | Wi-Fi 802.11ac or Ethernet (10/100 Mbps)
+  Operating System          | Windows 10 / macOS Monterey / Ubuntu 20.04
+
+  Component                 | Recommended Specification
+  --------------------------+--------------------------------------------------
+  Processor                 | Intel Core i5 (10th Gen+) / AMD Ryzen 5
+  RAM                       | 16 GB DDR4
+  Storage                   | 512 GB SSD
+  Display                   | 15.6-inch, 1920 x 1080 resolution
+  Network                   | Wi-Fi 6 or Gigabit Ethernet
+
+
+B. WEB SERVER / PRODUCTION SERVER (Minimum Requirements)
+--------------------------------------------------------------------------------
+
+  Component                 | Minimum Specification
+  --------------------------+--------------------------------------------------
+  Processor                 | 2 vCPU cores
+  RAM                       | 2 GB
+  Storage                   | 40 GB SSD
+  Bandwidth                 | 1 TB/month
+  Network                   | 100 Mbps uplink
+  Operating System          | Linux (Ubuntu 22.04 LTS)
+
+  Component                 | Recommended Specification
+  --------------------------+--------------------------------------------------
+  Processor                 | 4 vCPU cores
+  RAM                       | 4 GB
+  Storage                   | 80 GB SSD
+  Bandwidth                 | Unmetered
+  Network                   | 1 Gbps uplink
+
+
+C. END-USER / CLIENT DEVICE (Minimum Requirements)
+--------------------------------------------------------------------------------
+
+  Device Type               | Minimum Specification
+  --------------------------+--------------------------------------------------
+
+  Desktop / Laptop:
+    Processor               | Intel Core i3 / AMD Ryzen 3 or equivalent
+    RAM                     | 4 GB
+    Storage                 | 128 GB (any type)
+    Display                 | 1366 x 768 resolution
+    Network                 | Stable internet (5 Mbps+)
+    Browser                 | Any modern browser (Chrome, Firefox, Edge, Safari)
+
+  Tablet:
+    Processor               | Quad-core 1.5 GHz or better
+    RAM                     | 3 GB
+    Storage                 | 32 GB
+    Display                 | 8-inch, 1280 x 800 resolution
+    Network                 | Wi-Fi or Mobile Data (4G/5G)
+    Browser                 | Chrome Mobile / Safari Mobile
+
+  Smartphone:
+    Processor               | Quad-core 1.5 GHz or better
+    RAM                     | 3 GB
+    Storage                 | 32 GB
+    Display                 | 5.5-inch, 720 x 1280 resolution
+    Network                 | Wi-Fi or Mobile Data (4G/5G)
+    Browser                 | Chrome Mobile / Safari Mobile
+
+
+D. NETWORK INFRASTRUCTURE
+--------------------------------------------------------------------------------
+
+  Component                 | Specification
+  --------------------------+--------------------------------------------------
+  Internet Connection       | Minimum 10 Mbps (for admin operations)
+  Router                    | Wi-Fi 5 (802.11ac) or better
+  Firewall                  | Software-based or hardware firewall recommended
+  SSL/TLS                   | Required for HTTPS (Let's Encrypt or equivalent)
+
+
+E. PERIPHERAL DEVICES (Optional - for POS & Admin Operations)
+--------------------------------------------------------------------------------
+
+  Device                    | Purpose
+  --------------------------+--------------------------------------------------
+  Printer                   | Receipt / invoice printing (thermal or inkjet)
+  Barcode Scanner           | Product scanning for POS (future enhancement)
+  UPS (Uninterruptible      | Power backup for server and POS terminals
+    Power Supply)           |
+
+
+================================================================================
+  END OF SOFTWARE AND HARDWARE SPECIFICATIONS
+================================================================================

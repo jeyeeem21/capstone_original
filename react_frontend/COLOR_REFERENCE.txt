@@ -1,0 +1,393 @@
+================================================================================
+                    KJP RICEMILL - COLOR REFERENCE GUIDE
+================================================================================
+
+Created: January 31, 2026
+Last Updated: March 10, 2026
+Purpose: Documentation of all colors used in the application
+
+================================================================================
+                              TABLE OF CONTENTS
+================================================================================
+1. Theme Colors (Primary & Secondary)
+2. Border Colors
+3. Background Colors
+4. Text Colors
+5. Button Colors
+6. Chart Colors (Hex)
+7. Badge/Status Colors
+8. Shadow Colors
+9. CSS Variables
+10. Color Presets in Settings
+
+================================================================================
+                         1. THEME COLORS
+================================================================================
+
+PRIMARY COLORS (Green - Main Theme)
+-----------------------------------
+Shade   | Hex Value   | Usage
+--------|-------------|------------------------------------------
+50      | #f0fdf4     | Very light backgrounds, hover states
+100     | #dcfce7     | Light backgrounds, selected states
+200     | #bbf7d0     | Borders, input fields
+300     | #86efac     | Borders, cards, tables (MAIN BORDER COLOR)
+400     | #4ade80     | Accent borders, hover states
+500     | #22c55e     | Primary buttons, active states, main accent
+600     | #16a34a     | Button hover, strong accents
+700     | #15803d     | Dark accents
+800     | #166534     | Very dark accents
+900     | #14532d     | Darkest shade
+
+SECONDARY COLORS (Yellow/Amber)
+-------------------------------
+Shade   | Hex Value   | Usage
+--------|-------------|------------------------------------------
+50      | #fefce8     | Very light yellow backgrounds
+100     | #fef9c3     | Light yellow backgrounds
+200     | #fef08a     | Yellow accents
+300     | #fde047     | Bright yellow
+400     | #facc15     | Yellow highlights
+500     | #eab308     | Secondary buttons, yellow accents
+600     | #ca8a04     | Dark yellow
+700     | #a16207     | Darker yellow
+800     | #854d0e     | Very dark yellow
+900     | #713f12     | Darkest yellow
+
+================================================================================
+                         2. BORDER COLORS
+================================================================================
+
+Element                 | Color Class              | Hex Equivalent
+------------------------|--------------------------|----------------
+Cards                   | border-primary-300       | #86efac (Green)
+Tables                  | border-primary-300       | #86efac (Green)
+Modals                  | border-primary-300       | #86efac (Green)
+Sidebar                 | border-primary-300       | #86efac (Green)
+Input Fields            | border-primary-200       | #bbf7d0 (Light Green)
+Table Headers           | border-primary-200       | #bbf7d0 (Light Green)
+Dividers/Sections       | border-primary-200       | #bbf7d0 (Light Green)
+Hover States            | border-primary-400       | #4ade80 (Bright Green)
+Active/Selected         | border-primary-500       | #22c55e (Main Green)
+Page Header             | border-primary-200       | #bbf7d0 (Light Green)
+Cart Items              | border-primary-200       | #bbf7d0 (Light Green)
+Date Filter             | border-primary-200       | #bbf7d0 (Light Green)
+
+SEMANTIC BORDERS:
+-----------------
+Success                 | border-green-200         | Green tint
+Error/Danger            | border-red-200           | Red tint
+Warning                 | border-yellow-200        | Yellow tint
+Info                    | border-blue-200          | Blue tint
+
+================================================================================
+                         3. BACKGROUND COLORS
+================================================================================
+
+NEUTRAL BACKGROUNDS:
+--------------------
+Color Class             | Hex Value   | Usage
+------------------------|-------------|----------------------------------
+bg-white                | #ffffff     | Cards, modals, main containers
+bg-gray-50              | #f9fafb     | Settings panels, alternate rows
+bg-gray-100             | #f3f4f6     | Main layout, secondary areas
+
+PRIMARY (GREEN) BACKGROUNDS:
+----------------------------
+Color Class             | Hex Value   | Usage
+------------------------|-------------|----------------------------------
+bg-primary-50           | #f0fdf4     | Selected states, light accents
+bg-primary-50/30        | #f0fdf4     | Semi-transparent accents (30%)
+bg-primary-100          | #dcfce7     | Table row selected states
+bg-primary-500          | #22c55e     | Buttons, pagination active
+
+SEMANTIC BACKGROUNDS:
+---------------------
+Element                 | Background          | Usage
+------------------------|---------------------|---------------------------
+Success                 | bg-green-50/100     | Success panels, badges
+Error                   | bg-red-50/100       | Error panels, badges
+Warning                 | bg-yellow-50/100    | Warning panels, badges
+Info                    | bg-blue-50/100      | Info panels, badges
+
+================================================================================
+                         4. TEXT COLORS
+================================================================================
+
+Color Class             | Hex Value   | Usage
+------------------------|-------------|----------------------------------
+text-white              | #ffffff     | On colored backgrounds, buttons
+text-gray-400           | #9ca3af     | Placeholders, disabled, icons
+text-gray-500           | #6b7280     | Secondary text, subtitles
+text-gray-600           | #4b5563     | Body text, inactive items
+text-gray-700           | #374151     | Standard text
+text-gray-800           | #1f2937     | Headings, strong text
+text-primary-500        | #22c55e     | Accent text, links
+text-primary-600        | #16a34a     | Stats values, prices
+text-primary-700        | #15803d     | Selected sidebar text
+text-green-600          | #16a34a     | Success/growth indicators
+text-green-700          | #15803d     | Success badges
+text-red-600            | #dc2626     | Error/decline indicators
+text-red-700            | #b91c1c     | Error badges
+text-blue-600           | #2563eb     | Info text
+text-yellow-600         | #ca8a04     | Warning text
+text-orange-600         | #ea580c     | Supplier/inventory badges
+text-purple-600         | #9333ea     | Manager role badge
+text-cyan-600           | #0891b2     | Procurement staff badge
+
+================================================================================
+                         5. BUTTON COLORS
+================================================================================
+
+BUTTON VARIANTS:
+----------------
+Variant     | Background      | Text          | Hover           | Focus Ring
+------------|-----------------|---------------|-----------------|---------------
+Default     | bg-primary-500  | text-white    | bg-primary-600  | ring-primary-500
+Secondary   | bg-gray-100     | text-gray-700 | bg-gray-200     | ring-gray-500
+Outline     | transparent     | text-gray-700 | bg-gray-50      | ring-primary-500
+Ghost       | transparent     | text-gray-700 | bg-gray-100     | ring-gray-500
+Danger      | bg-red-500      | text-white    | bg-red-600      | ring-red-500
+Success     | bg-green-500    | text-white    | bg-green-600    | ring-green-500
+Warning     | bg-yellow-500   | text-white    | bg-yellow-600   | ring-yellow-500
+Info        | bg-blue-500     | text-white    | bg-blue-600     | ring-blue-500
+
+================================================================================
+                         6. CHART COLORS (HEX)
+================================================================================
+
+Hex Value   | Tailwind Name   | Usage
+------------|-----------------|------------------------------------------
+#22c55e     | green-500       | Main chart line, success data, stock
+#84cc16     | lime-500        | Bar charts, stock levels
+#eab308     | yellow-500      | Input data (dashed), secondary series
+#ef4444     | red-500         | Error data, stock out, husk/waste
+#f97316     | orange-500      | Tertiary chart data
+#3b82f6     | blue-500        | Info chart data, net change
+#8b5cf6     | violet-500      | Purple chart data
+#ec4899     | pink-500        | Pink chart data
+
+================================================================================
+                         7. BADGE/STATUS COLORS
+================================================================================
+
+STAFF ROLES:
+------------
+Role                | Background      | Text Color
+--------------------|-----------------|------------------
+Manager             | bg-purple-100   | text-purple-600
+Cashier             | bg-blue-100     | text-blue-600
+Inventory Staff     | bg-orange-100   | text-orange-600
+Processing Staff    | bg-green-100    | text-green-600
+Procurement Staff   | bg-cyan-100     | text-cyan-600
+Default             | bg-gray-100     | text-gray-600
+
+PARTNER TYPES:
+--------------
+Type                | Background      | Text Color
+--------------------|-----------------|------------------
+Supplier            | bg-orange-100   | text-orange-600
+Customer            | bg-blue-100     | text-blue-600
+
+STOCK MOVEMENT:
+---------------
+Type                | Background      | Text Color
+--------------------|-----------------|------------------
+In (Stock In)       | bg-green-100    | text-green-700
+Out (Stock Out)     | bg-red-100      | text-red-700
+
+PROCESSING STATUS:
+------------------
+Status              | Background      | Text Color
+--------------------|-----------------|------------------
+Completed           | bg-green-100    | text-green-700
+In Progress         | bg-blue-100     | text-blue-700
+Pending             | bg-yellow-100   | text-yellow-700
+
+ORDER/SALE STATUS:
+------------------
+Status              | Background      | Text Color
+--------------------|-----------------|------------------
+Pending             | bg-yellow-50    | text-yellow-600
+Processing          | bg-blue-50      | text-blue-600
+Shipped             | bg-blue-50      | text-blue-600
+Delivered           | bg-green-50     | text-green-600
+Completed           | bg-green-50     | text-green-600
+Return Requested    | bg-yellow-50    | text-yellow-600
+Picking Up          | bg-yellow-50    | text-yellow-600
+Returned            | bg-red-50       | text-red-600
+Cancelled           | bg-red-50       | text-red-600
+Voided              | bg-red-50       | text-red-600
+Rejected            | bg-red-50       | text-red-600
+Paid                | bg-green-50     | text-green-600
+
+PAYMENT STATUS:
+---------------
+Status              | Background      | Text Color
+--------------------|-----------------|------------------
+Paid                | bg-green-50     | text-green-600
+Not Paid            | bg-yellow-50    | text-yellow-600
+
+================================================================================
+                         8. SHADOW COLORS
+================================================================================
+
+Shadow Class                | Usage
+----------------------------|------------------------------------------
+shadow-sm                   | Buttons, small elements
+shadow-md                   | Active states, hover effects
+shadow-lg                   | Cards, modals, charts
+shadow-xl                   | Main layout containers
+shadow-2xl                  | Modal dialogs
+shadow-primary-100/50       | Card shadows (green tint)
+shadow-primary-200/50       | Active state shadows (green tint)
+shadow-primary-500/25       | Sidebar menu shadows (green tint)
+
+================================================================================
+                         9. CSS VARIABLES
+================================================================================
+
+Variable                    | Default Value   | Description
+----------------------------|-----------------|-----------------------------
+--color-primary-50          | #f0fdf4         | Lightest primary
+--color-primary-100         | #dcfce7         | Very light primary
+--color-primary-200         | #bbf7d0         | Light primary
+--color-primary-300         | #86efac         | Medium light primary
+--color-primary-400         | #4ade80         | Medium primary
+--color-primary-500         | #22c55e         | Base primary (GREEN)
+--color-primary-600         | #16a34a         | Medium dark primary
+--color-primary-700         | #15803d         | Dark primary
+--color-primary-800         | #166534         | Very dark primary
+--color-primary-900         | #14532d         | Darkest primary
+
+--color-button-secondary    | #eab308         | Secondary button (YELLOW)
+--color-bg-primary          | #ffffff         | Main background
+--color-bg-secondary        | #f0fdf4         | Secondary background
+--color-pagination-bg       | #22c55e         | Pagination active bg
+--color-pagination-text     | #ffffff         | Pagination text
+--color-text-primary        | #1f2937         | Main text color
+--color-text-secondary      | #6b7280         | Secondary text color
+
+================================================================================
+                         10. COLOR PRESETS (SETTINGS)
+================================================================================
+
+GREEN PRESETS:
+--------------
+#22c55e, #16a34a, #15803d, #84cc16, #65a30d
+
+BLUE PRESETS:
+-------------
+#3b82f6, #2563eb, #1d4ed8, #06b6d4, #0891b2
+
+PURPLE PRESETS:
+---------------
+#8b5cf6, #7c3aed, #6d28d9, #a855f7, #9333ea
+
+RED PRESETS:
+------------
+#ef4444, #dc2626, #b91c1c, #f97316, #ea580c
+
+YELLOW PRESETS:
+---------------
+#eab308, #ca8a04, #a16207, #facc15, #fde047
+
+GRAY PRESETS:
+-------------
+#6b7280, #4b5563, #374151, #9ca3af, #d1d5db
+
+WHITE/LIGHT PRESETS:
+--------------------
+#ffffff, #f9fafb, #f3f4f6, #fafafa, #f0fdf4
+
+================================================================================
+                      11. DARK MODE COLORS
+================================================================================
+
+ACTIVATION: Dark mode is toggled via `html.dark` CSS class (Tailwind `class` strategy).
+Overrides are defined in `src/index.css` under `html.dark` and `@layer base`.
+
+BACKGROUND OVERRIDES:
+---------------------
+Light Class          | Dark Override        | Dark Hex
+---------------------|----------------------|-----------
+bg-white             | #1e293b              | Slate 800
+bg-gray-50           | #334155              | Slate 700
+bg-gray-100          | #334155              | Slate 700
+aside (sidebar)      | #1e293b !important   | Slate 800
+
+CSS VARIABLE OVERRIDES:
+-----------------------
+Variable                    | Light Value   | Dark Value
+----------------------------|---------------|---------------
+--color-bg-primary          | #ffffff       | #0f172a (Slate 900)
+--color-bg-secondary        | #f0fdf4       | #1e293b (Slate 800)
+--color-text-primary        | #1f2937       | #f1f5f9 (Slate 100)
+--color-text-secondary      | #6b7280       | #cbd5e1 (Slate 300)
+
+TEXT OVERRIDES:
+--------------
+Light Class          | Dark Override        | Dark Hex
+---------------------|----------------------|-----------
+text-gray-800/900    | #f1f5f9              | Slate 100
+text-gray-700        | #e2e8f0              | Slate 200
+text-gray-600        | #cbd5e1              | Slate 300
+text-gray-500/400    | #94a3b8              | Slate 400
+
+BORDER OVERRIDES:
+-----------------
+Light Class          | Dark Override        | Dark Hex
+---------------------|----------------------|-----------
+border-gray-100/200  | #475569              | Slate 600
+border-gray-300      | #64748b              | Slate 500
+
+INPUT/FORM OVERRIDES:
+---------------------
+input, select, textarea  | bg: #334155 | text: #f1f5f9 | placeholder: #94a3b8
+
+TABLE OVERRIDES:
+----------------
+Element              | Dark Override
+---------------------|-----------------------------
+th                   | bg: #334155, text: #f1f5f9
+td                   | text: #e2e8f0
+row hover            | var(--color-hover-light) rgba(34,197,94,0.3)
+row selected         | var(--color-button-700)
+
+SHADOW OVERRIDES:
+-----------------
+shadow-xl, shadow-lg | --tw-shadow-color: rgba(0,0,0,0.4)
+
+STATUSBADGE DARK MODE (Tailwind dark: variants inline):
+-------------------------------------------------------
+Variant   | Dark Background           | Dark Text
+----------|---------------------------|-----------------
+success   | dark:bg-green-500/15      | dark:text-green-400
+warning   | dark:bg-yellow-500/15     | dark:text-yellow-400
+danger    | dark:bg-red-500/15        | dark:text-red-400
+info      | dark:bg-blue-500/15       | dark:text-blue-400
+default   | dark:bg-gray-700          | dark:text-gray-300
+
+================================================================================
+                              SUMMARY
+================================================================================
+
+MAIN THEME:
+- Primary Color: GREEN (#22c55e)
+- Secondary Color: YELLOW (#eab308)
+- Borders: GREEN (#86efac / primary-300)
+- Backgrounds: WHITE (#ffffff) + Light Green (#f0fdf4)
+
+KEY COLOR ASSIGNMENTS:
+- Active Sidebar: Green gradient (primary-500 to secondary-400)
+- Buttons: Green (primary-500)
+- Cards/Tables Border: Green (primary-300)
+- Text: Gray scale (gray-400 to gray-800)
+- Success: Green
+- Error/Danger: Red
+- Warning: Yellow
+- Info: Blue
+
+================================================================================
+                          END OF DOCUMENT
+================================================================================

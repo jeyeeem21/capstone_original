@@ -1,0 +1,329 @@
+================================================================================
+KJP RICEMILL SYSTEM — ALL FORMULAS
+================================================================================
+Source: Scanned from all Services, Models, and Resources
+================================================================================
+
+
+================================================================================
+A. PROCUREMENT
+================================================================================
+Source: app/Models/Procurement.php (observer/saving hook)
+
+  Procurement Total Cost
+  ─────────────────────────────────────────────────────────────────────
+  total_cost = quantity_kg × price_per_kg
+
+  Fields:
+    quantity_kg   — total kg purchased from supplier
+    price_per_kg  — price per kilogram (admin-entered)
+    total_cost    — auto-computed on save
+
+
+================================================================================
+B. DRYING
+================================================================================
+Source: app/Models/DryingProcess.php
+
+  Drying Total Price (cost to dry a batch)
+  ─────────────────────────────────────────────────────────────────────
+  total_price = sacks × price_per_day × days
+
+  Fields:
+    sacks         — number of sacks sent to drying
+    price         — drying rate per sack per day (admin-entered)
+    days          — number of drying days
+    total_price   — auto-computed
+
+  Drying Proportional Cost Share (when processing uses partial drying output)
+  ─────────────────────────────────────────────────────────────────────
+  fraction            = kg_taken_from_drying / drying_total_kg
+  drying_cost_share   = fraction × drying_total_price
+
+  Proportional Kg (when sending sacks to drying from batch)
+  ─────────────────────────────────────────────────────────────────────
+  proportional_kg = (sacks_sent / total_sacks) × total_procurement_kg
+
+
+================================================================================
+C. PROCESSING (MILLING)
+================================================================================
+Source: app/Models/Processing.php (calculateResults method)
+        app/Services/ProcessingService.php
+
+  Husk Weight
+  ─────────────────────────────────────────────────────────────────────
+  husk_kg = input_kg - output_kg
+
+  Fields:
+    input_kg   — paddy (rough rice) fed into the mill
+    output_kg  — milled rice output (admin-entered after milling)
+    husk_kg    — byproduct (difference)
+
+  Milling Yield %
+  ─────────────────────────────────────────────────────────────────────
+  yield_percent = (output_kg / input_kg) × 100
+               = 0 if input_kg = 0
+
+  Remaining Stock in Processing Batch
+  ─────────────────────────────────────────────────────────────────────
+  remaining_kg = max(0, output_kg - stock_out)
+
+  Fields:
+    stock_out  — kg already distributed to product inventory
+
+  Drying Source Share Allocation (when processing uses multiple drying sources)
+  ─────────────────────────────────────────────────────────────────────
+  proportion = source_remaining_kg / total_available_kg
+  share      = input_kg × proportion   (pro-rata per source)
+  (Last source gets: input_kg - sum_of_all_previous_shares)
+
+  Average Yield (across all completed processings)
+  ─────────────────────────────────────────────────────────────────────
+  avg_yield = AVG(yield_percent) of all completed batches
+
+
+================================================================================
+D. PROCESSING COST — PER DISTRIBUTION BATCH
+================================================================================
+Source: app/Services/ProductService.php (computeProcessingCost)
+
+  Procurement Cost Share per Distribution
+  ─────────────────────────────────────────────────────────────────────
+  For individual drying:
+    procurement_cost_for_drying = drying_total_kg × price_per_kg
+    procurement_cost_share      = fraction × procurement_cost_for_drying
+
+  For batch drying (multiple procurements):
+    procurement_cost_for_drying = SUM(bp.quantity_kg × bp.price_per_kg) per batch alloc
+    procurement_cost_share      = fraction × procurement_cost_for_drying
+
+  Total Batch Cost
+  ─────────────────────────────────────────────────────────────────────
+  total_cost         = procurement_cost + drying_cost
+  cost_per_output_kg = total_cost / output_kg
+
+  When distributing (scaling by proportion of output_kg taken):
+  ─────────────────────────────────────────────────────────────────────
+  fraction           = kg_to_take / output_kg_of_processing_batch
+  procurement_cost   = batch_procurement_cost × fraction
+  drying_cost        = batch_drying_cost × fraction
+  total_cost         = procurement_cost + drying_cost
+
+  Cost Per Unit (per sack produced)
+  ─────────────────────────────────────────────────────────────────────
+  cost_per_unit = total_cost / total_units_produced
+
+  Fields:
+    total_units = floor(actual_kg_consumed / weight_per_unit)
+    weight_per_unit = product.weight (e.g. 25 kg/sack)
+
+
+================================================================================
+E. PERPETUAL WEIGHTED AVERAGE COST (PWAC)
+================================================================================
+Source: app/Services/ProductService.php (distributeProcessing)
+        app/Http/Resources/SaleResource.php
+
+  Running Average Cost — computed at each new distribution
+  ─────────────────────────────────────────────────────────────────────
+  running_avg_cost = ((units_on_hand_before × previous_running_avg) + batch_total_cost)
+                    / (units_on_hand_before + new_units)
+
+  Fields:
+    units_on_hand_before  = product.stocks at the moment of distribution (before adding)
+    previous_running_avg  = running_avg_cost of the most recent prior IN log
+    batch_total_cost      = total_cost of the new batch being distributed
+    new_units             = total units added in this batch
+
+  NOTE: If no prior IN log exists, previous_running_avg = 0.
+  Stored in: stock_logs.running_avg_cost (4 decimal precision)
+
+  Sale Cost Per Unit — looks up PWAC at time of sale
+  ─────────────────────────────────────────────────────────────────────
+  avg_cost_per_unit = running_avg_cost from the most recent IN log
+                      with created_at <= sale.created_at
+
+  This ensures each sale uses the cost that was in effect when it was placed,
+  and future distributions never retroactively change historical sale costs.
+
+
+================================================================================
+F. INVENTORY — PRODUCT COST ANALYSIS
+================================================================================
+Source: app/Services/ProductService.php (getProductCostAnalysis)
+
+  Average Cost Per Kg (across all distributions of a product)
+  ─────────────────────────────────────────────────────────────────────
+  avg_cost_per_kg = SUM(total_cost) / SUM(kg_amount) — from all IN stock logs
+
+  Average Cost Per Unit
+  ─────────────────────────────────────────────────────────────────────
+  avg_cost_per_unit = avg_cost_per_kg × weight_per_unit
+
+  Profit Per Unit
+  ─────────────────────────────────────────────────────────────────────
+  profit_per_unit = selling_price - avg_cost_per_unit
+
+  Profit Margin %
+  ─────────────────────────────────────────────────────────────────────
+  profit_margin = (profit_per_unit / selling_price) × 100
+
+
+================================================================================
+G. SALES ORDER
+================================================================================
+Source: app/Services/SaleService.php (createOrder)
+
+  Item Subtotal
+  ─────────────────────────────────────────────────────────────────────
+  item_subtotal = unit_price × quantity
+
+  Order Subtotal
+  ─────────────────────────────────────────────────────────────────────
+  subtotal = SUM(item_subtotal) for all items
+
+  Order Total
+  ─────────────────────────────────────────────────────────────────────
+  total = subtotal - discount + delivery_fee
+
+  Change Amount (POS cash payment)
+  ─────────────────────────────────────────────────────────────────────
+  change_amount = max(0, amount_tendered - total)
+               = 0 if amount_tendered = 0
+
+
+================================================================================
+H. SALE PROFIT (per sale, via SaleResource)
+================================================================================
+Source: app/Http/Resources/SaleResource.php
+
+  Item Cost
+  ─────────────────────────────────────────────────────────────────────
+  item_total_cost = PWAC_cost_per_unit × quantity
+
+  Item Profit
+  ─────────────────────────────────────────────────────────────────────
+  item_profit = item_subtotal - item_total_cost
+
+  Sale Total Cost
+  ─────────────────────────────────────────────────────────────────────
+  total_cost = SUM(item_total_cost) for all items
+
+  Sale Total Profit
+  ─────────────────────────────────────────────────────────────────────
+  total_profit = SUM(item_profit)
+              = sale.total - total_cost  (approximately, before delivery fee)
+
+  Profit Margin %
+  ─────────────────────────────────────────────────────────────────────
+  profit_margin = (total_profit / sale.total) × 100
+               = 0 if sale.total = 0
+
+
+================================================================================
+I. SALES ANALYTICS (Sales Page Stats)
+================================================================================
+Source: react_frontend/src/pages/admin/Sales/Sales.jsx
+
+  Total Revenue  = SUM(sale.total) for delivered/completed orders in filter
+  Total Profit   = SUM(sale.total_profit) for delivered/completed orders
+  Profit Margin  = (Total Profit / Total Revenue) × 100
+  Avg per Day    = Total Revenue / number of days in period
+  Avg Order      = Total Revenue / number of orders
+
+
+================================================================================
+J. PREDICTIVE ANALYSIS (Sales Forecasting)
+================================================================================
+Source: app/Services/SalesPredictionService.php
+
+  Weighted Moving Average (WMA) — base forecast
+  ─────────────────────────────────────────────────────────────────────
+  Window = last 7 historical data points (or fewer if not available)
+  Weights = [1, 2, 3, 4, 5, 6, 7]  (most recent = highest weight)
+  weight_sum = SUM(weights)
+
+  WMA = SUM(value[i] × weight[i]) / weight_sum   for i in window
+
+  Linear Trend (Least Squares Regression Slope) — trend adjustment
+  ─────────────────────────────────────────────────────────────────────
+  Uses last 12 data points maximum.
+
+  n     = number of data points
+  sumX  = SUM(i)     for i = 1..n
+  sumY  = SUM(y[i])
+  sumXY = SUM(i × y[i])
+  sumX2 = SUM(i²)
+
+  slope (trend) = (n × sumXY - sumX × sumY) / (n × sumX2 - sumX²)
+
+  Forecast per period
+  ─────────────────────────────────────────────────────────────────────
+  forecast[i] = WMA + (slope × i)   for i = 1..forecast_count
+
+  Forecast horizons:
+    Daily   → 14 days ahead
+    Monthly → 6 months ahead
+    Yearly  → 3 years ahead
+
+  Trend Classification
+  ─────────────────────────────────────────────────────────────────────
+  trend_pct = ((avg_forecast_revenue - avg_historical_revenue) / avg_historical_revenue) × 100
+  trend     = 'growing'  if trend_pct > 5%
+            = 'declining' if trend_pct < -5%
+            = 'stable'   otherwise
+
+  Growth Rate (period-over-period)
+  ─────────────────────────────────────────────────────────────────────
+  growth_rate = ((last_period_revenue - prev_period_revenue) / prev_period_revenue) × 100
+
+  Confidence Level
+  ─────────────────────────────────────────────────────────────────────
+  'high'   if data_points >= 30
+  'medium' if data_points >= 12
+  'low'    if data_points < 12
+
+  Average Order Value (historical)
+  ─────────────────────────────────────────────────────────────────────
+  avg_order = revenue / orders   (per period)
+
+
+================================================================================
+K. DELIVERY
+================================================================================
+Source: app/Services/DeliveryAssignmentService.php
+
+  Delivery Item Total
+  ─────────────────────────────────────────────────────────────────────
+  item_total = quantity × price
+
+  Note: Delivery fee (distance-based) is admin-entered on the order form.
+  No automatic rate calculation exists in the system — admin sets it manually.
+
+
+================================================================================
+SUMMARY TABLE
+================================================================================
+
+  Module          Formula
+  ──────────────  ──────────────────────────────────────────────────────────
+  Procurement     total_cost = quantity_kg × price_per_kg
+  Drying          total_price = sacks × price_per_day × days
+  Processing      husk_kg = input_kg - output_kg
+                  yield_percent = (output_kg / input_kg) × 100
+                  remaining_kg = output_kg - stock_out
+  Distribution    cost_per_unit = total_batch_cost / units_produced
+  PWAC            running_avg = ((stock_before × prev_avg) + batch_cost)
+                               / (stock_before + new_units)
+  Sale Cost       item_cost = PWAC_at_sale_date × quantity
+  Sale Profit     profit = revenue - cost
+                  margin = profit / revenue × 100
+  Order Total     total = subtotal - discount + delivery_fee
+  Change          change = max(0, tendered - total)
+  Forecast WMA    forecast = WMA_base + (slope × period_offset)
+  Trend Slope     slope = (n·ΣXY - ΣX·ΣY) / (n·ΣX² - (ΣX)²)
+  Trend %         ((avg_forecast - avg_historical) / avg_historical) × 100
+  Growth Rate     ((current - previous) / previous) × 100
+
+================================================================================

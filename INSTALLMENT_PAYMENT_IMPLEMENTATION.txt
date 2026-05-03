@@ -1,0 +1,805 @@
+================================================================================
+  PARTIAL PAYMENT & PAYMENT MANAGEMENT — IMPLEMENTATION INSIGHTS (v2)
+================================================================================
+  Date: April 20, 2026 (Revised)
+  System: KJ Price Mill POS + Order Management
+================================================================================
+
+TABLE OF CONTENTS
+  1. REVISED CONCEPT OVERVIEW
+  2. DATABASE CHANGES (New Tables & Migrations)
+  3. BACKEND CHANGES (Models, Services, Controllers, Routes)
+  4. FRONTEND CHANGES (POS, Payments Page, Sales, Customer, Portal)
+  5. ROLE-BASED ACCESS & PERMISSIONS
+  6. AFFECTED FILES (Complete List)
+  7. RECOMMENDED UI/UX PLACEMENT
+  8. BUSINESS RULES & EDGE CASES
+  9. IMPLEMENTATION PRIORITY / PHASES
+
+================================================================================
+  1. REVISED CONCEPT OVERVIEW
+================================================================================
+
+  OLD APPROACH (v1 — SCRAPPED):
+    - Add a 5th payment method called "Installment"
+    - Only installment orders could have partial payments
+
+  NEW APPROACH (v2 — THIS DOCUMENT):
+    - NO new payment method needed
+    - ALL 4 existing payment methods support partial payments natively
+    - A dedicated PAYMENTS PAGE manages, verifies, holds, or cancels payments
+
+  How it works now — ALL methods support partial:
+  -----------------------------------------------------------------------
+    - Cash      → Enter amount paid → if amount < total → balance remains
+    - GCash     → Enter amount paid → if amount < total → balance remains
+    - COD       → Enter amount paid → if amount < total → balance remains
+    - Pay Later → No payment now → full balance → pay later (enter amount,
+                  if amount < total → balance still remains)
+  -----------------------------------------------------------------------
+
+  Example Flow:
+    1. Customer orders ₱1,000 worth of goods
+    2. Pays ₱500 via Cash → payment_status = 'partial', balance = ₱500
+    3. Comes back, pays ₱300 via GCash → balance = ₱200
+    4. Comes back, pays ₱200 via Cash → balance = ₱0 → payment_status = 'paid'
+
+  Key Insight: Each subsequent payment can use a DIFFERENT method.
+    - 1st payment: Cash ₱500
+    - 2nd payment: GCash ₱300
+    - 3rd payment: Cash ₱200
+    → The sale's payment_method stays as original (cash), but each
+      individual payment record has its own method.
+
+  ★ NEW: PAYMENTS PAGE (Payment Verification & Management)
+  -----------------------------------------------------------------------
+  WHY: What if someone sends a GCash screenshot but walang pumasok?
+       What if the reference number is wrong? What if they uploaded
+       a fake proof of payment?
+
+  The Payments page lets admin:
+    - SEE all recorded payments across all orders
+    - VERIFY — confirm a payment is legitimate (verified status)
+    - HOLD — flag a suspicious payment for review (on_hold status)
+    - CANCEL/REJECT — reject a bad payment, reverting the balance
+      (e.g., GCash proof but no actual money received)
+    - This ensures financial integrity — payments aren't just
+      "fire and forget", they go through a verification flow
+
+================================================================================
+  2. DATABASE CHANGES (New Tables & Migrations)
+================================================================================
+
+  A. NEW TABLE: `payments` (tracks EVERY individual payment transaction)
+  -----------------------------------------------------------------------
+  | Column             | Type             | Notes                        |
+  |--------------------|------------------|------------------------------|
+  | id                 | bigint PK        | Auto increment               |
+  | sale_id            | bigint FK        | → sales.id                   |
+  | amount             | decimal(12,2)    | Amount paid in this payment  |
+  | payment_method     | varchar(20)      | cash, gcash (method used     |
+  |                    |                  | for THIS specific payment)   |
+  | reference_number   | varchar(255)     | For GCash payments           |
+  | payment_proof      | json nullable    | Proof image paths            |
+  | status             | varchar(20)      | pending, verified, on_hold,  |
+  |                    |   default        | cancelled                    |
+  |                    |   'verified'     | Cash = auto-verified         |
+  |                    |                  | GCash = starts as 'pending'  |
+  | hold_reason        | text nullable    | Why payment was put on hold  |
+  | cancel_reason      | text nullable    | Why payment was cancelled    |
+  | notes              | text nullable    | Optional note per payment    |
+  | received_by        | bigint FK null   | → users.id (staff who        |
+  |                    |                  | recorded the payment)        |
+  | verified_by        | bigint FK null   | → users.id (who verified)    |
+  | verified_at        | timestamp null   | When it was verified         |
+  | paid_at            | timestamp        | When payment was made        |
+  | created_at         | timestamp        |                              |
+  | updated_at         | timestamp        |                              |
+  -----------------------------------------------------------------------
+
+  Payment Status Flow:
+    Cash payments:    → auto 'verified' (cash is immediate, no proof needed)
+    GCash payments:   → starts as 'pending' → admin verifies → 'verified'
+                      → OR admin flags → 'on_hold' → then 'verified' or 'cancelled'
+    Cancelled:        → payment amount is REVERSED from the sale's amount_paid
+                         and ADDED BACK to balance_remaining
+
+  B. MODIFY `sales` TABLE (add balance tracking columns)
+  -----------------------------------------------------------------------
+  | New Column         | Type             | Notes                        |
+  |--------------------|------------------|------------------------------|
+  | amount_paid        | decimal(12,2)    | Total verified amount paid   |
+  |                    |   default 0      | (sum of verified payments)   |
+  | balance_remaining  | decimal(12,2)    | total - amount_paid          |
+  |                    |   default 0      |                              |
+  -----------------------------------------------------------------------
+
+  payment_status now has 3 possible values:
+    - 'paid'      → balance_remaining = 0 (fully paid)
+    - 'not_paid'  → amount_paid = 0 (nothing paid yet, e.g., pay_later)
+    - 'partial'   → 0 < amount_paid < total (NEW)
+
+  C. MIGRATION FILE TO CREATE:
+  -----------------------------------------------------------------------
+  database/migrations/2026_04_21_000001_add_partial_payment_support.php
+
+  Contents:
+    1. Add `amount_paid` column to `sales` (decimal 12,2 default 0)
+    2. Add `balance_remaining` column to `sales` (decimal 12,2 default 0)
+    3. Create `payments` table (schema above)
+    4. Backfill existing data:
+       - All sales with payment_status = 'paid':
+           amount_paid = total, balance_remaining = 0
+       - All sales with payment_status = 'not_paid':
+           amount_paid = 0, balance_remaining = total
+
+================================================================================
+  3. BACKEND CHANGES
+================================================================================
+
+  A. NEW MODEL: Payment (app/Models/Payment.php)
+  -----------------------------------------------------------------------
+  Relationships:
+    - belongsTo(Sale::class)
+    - belongsTo(User::class, 'received_by')
+    - belongsTo(User::class, 'verified_by')
+
+  Fillable: sale_id, amount, payment_method, reference_number,
+            payment_proof, status, hold_reason, cancel_reason,
+            notes, received_by, verified_by, verified_at, paid_at
+
+  Casts:
+    - amount => decimal:2
+    - payment_proof => array
+    - paid_at => datetime
+    - verified_at => datetime
+
+  Scopes:
+    - scopeVerified($q) → where status = 'verified'
+    - scopePending($q) → where status = 'pending'
+    - scopeOnHold($q) → where status = 'on_hold'
+
+  B. MODIFY MODEL: Sale (app/Models/Sale.php)
+  -----------------------------------------------------------------------
+  Add to $fillable:
+    - 'amount_paid'
+    - 'balance_remaining'
+
+  Add to $casts:
+    - 'amount_paid' => 'decimal:2'
+    - 'balance_remaining' => 'decimal:2'
+
+  Add relationship:
+    - payments() → hasMany(Payment::class)
+
+  Add helpers:
+    - isFullyPaid() → balance_remaining <= 0
+    - isPartiallyPaid() → amount_paid > 0 && balance_remaining > 0
+    - verifiedPaymentsTotal() → payments()->verified()->sum('amount')
+
+  C. MODIFY SERVICE: SaleService (app/Services/SaleService.php)
+  -----------------------------------------------------------------------
+
+  ★ CHANGES TO createOrder():
+    Current logic:
+      payment_status = cash/gcash ? 'paid' : 'not_paid'
+
+    New logic for ALL payment methods:
+      if (payment_method == 'pay_later') {
+          // No payment now
+          amount_paid = 0
+          balance_remaining = total
+          payment_status = 'not_paid'
+      } else {
+          // Cash, GCash, COD — user enters amount
+          amount_tendered = data['amount_tendered']
+          if (amount_tendered >= total) {
+              // Full payment
+              amount_paid = total
+              balance_remaining = 0
+              payment_status = 'paid'
+              change_amount = amount_tendered - total
+          } else {
+              // Partial payment
+              amount_paid = amount_tendered
+              balance_remaining = total - amount_tendered
+              payment_status = 'partial'
+              change_amount = 0
+          }
+          // Create Payment record for initial payment
+          Payment::create(...)
+      }
+
+  ★ NEW METHOD: recordPayment(int $saleId, array $data)
+    - Find sale, check balance_remaining > 0
+    - Validate amount <= balance_remaining
+    - Determine initial status:
+        - Cash → auto 'verified'
+        - GCash → 'pending' (needs verification)
+    - Create Payment record
+    - If status = 'verified' (cash):
+        - Update sale: amount_paid += amount
+        - Update sale: balance_remaining -= amount
+        - If balance_remaining <= 0 → payment_status = 'paid', paid_at = now()
+        - Else → payment_status = 'partial'
+    - If status = 'pending' (gcash):
+        - DON'T update sale totals yet (wait for verification)
+    - Clear cache, return updated sale
+
+  ★ NEW METHOD: verifyPayment(int $paymentId)
+    - Find Payment record where status = 'pending' or 'on_hold'
+    - Set status = 'verified', verified_by = auth user, verified_at = now()
+    - NOW update sale: amount_paid += amount, balance_remaining -= amount
+    - If balance_remaining <= 0 → payment_status = 'paid', paid_at = now()
+    - Else if amount_paid > 0 → payment_status = 'partial'
+    - Clear cache
+
+  ★ NEW METHOD: holdPayment(int $paymentId, string $reason)
+    - Only allowed for 'pending' payments
+    - Set status = 'on_hold', hold_reason = reason
+    - Sale totals NOT affected (payment not yet counted)
+
+  ★ NEW METHOD: cancelPayment(int $paymentId, string $reason)
+    - If payment was 'verified' → REVERSE:
+        - sale.amount_paid -= payment.amount
+        - sale.balance_remaining += payment.amount
+        - Recalculate payment_status (paid/partial/not_paid)
+    - If payment was 'pending' or 'on_hold' → just cancel (no reversal needed)
+    - Set status = 'cancelled', cancel_reason = reason
+
+  ★ NEW METHOD: getPaymentHistory(int $saleId)
+    - Return all Payment records for a sale, ordered by paid_at
+    - Include received_by and verified_by user names
+
+  ★ NEW METHOD: getCustomerBalances(int $customerId)
+    - Sales where customer_id = X and balance_remaining > 0
+    - Include total outstanding across all orders
+    - Include payment history per order
+
+  ★ NEW METHOD: getAllOutstandingBalances()
+    - All sales where balance_remaining > 0, grouped by customer
+    - For the Payments page overview
+
+  D. MODIFY CONTROLLER: SaleController
+  -----------------------------------------------------------------------
+  File: app/Http/Controllers/SaleController.php
+
+  Modify existing:
+    - storeOrder() → handle partial payment logic in createOrder()
+    - markPaid() → now uses recordPayment() instead (or keep both)
+
+  New methods:
+    - recordPayment(Request $request, int $id)
+        Validate: amount (required, > 0), payment_method (cash|gcash),
+                  reference_number (if gcash), payment_proof, notes
+        Call SaleService::recordPayment()
+        Audit log + notifications
+
+    - paymentHistory(int $id)
+        Return all payments for a sale
+
+  E. NEW CONTROLLER: PaymentController
+  -----------------------------------------------------------------------
+  File: app/Http/Controllers/PaymentController.php
+
+  This is for the PAYMENTS PAGE — manages payment verification.
+
+  Methods:
+    - index()
+        List all payments with filters: status, method, date range, customer
+        Include sale info (transaction_id, customer, total, balance)
+
+    - verify(int $paymentId)
+        Mark payment as verified → updates sale balance
+        Audit log
+
+    - hold(Request $request, int $paymentId)
+        Put payment on hold with reason
+        Audit log
+
+    - cancel(Request $request, int $paymentId)
+        Cancel/reject payment → reverse sale balance if was verified
+        Audit log
+
+    - show(int $paymentId)
+        View single payment details with proof images
+
+  F. NEW RESOURCE: PaymentResource
+  -----------------------------------------------------------------------
+  File: app/Http/Resources/PaymentResource.php
+
+  Fields: id, sale_id, transaction_id, customer_name, amount,
+          payment_method, reference_number, payment_proof (URLs),
+          status, hold_reason, cancel_reason, notes,
+          received_by_name, verified_by_name, verified_at,
+          paid_at, created_at
+
+  G. MODIFY RESOURCE: SaleResource
+  -----------------------------------------------------------------------
+  File: app/Http/Resources/SaleResource.php
+
+  Add fields:
+    - amount_paid
+    - balance_remaining
+    - payments_count
+    - verified_payments_total
+    - has_pending_payments (boolean)
+
+  H. ROUTES: routes/api.php
+  -----------------------------------------------------------------------
+  Add inside sales prefix group:
+    POST   /sales/{id}/payment         → SaleController@recordPayment
+    GET    /sales/{id}/payments         → SaleController@paymentHistory
+
+  Add new payments prefix group (for the Payments page):
+    GET    /payments                    → PaymentController@index
+    POST   /payments/{id}/verify       → PaymentController@verify
+    POST   /payments/{id}/hold         → PaymentController@hold
+    POST   /payments/{id}/cancel       → PaymentController@cancel
+    GET    /payments/{id}              → PaymentController@show
+
+  Add inside customers prefix group:
+    GET    /customers/{id}/balances     → CustomerController@balances
+
+================================================================================
+  4. FRONTEND CHANGES
+================================================================================
+
+  A. POS PAGE — All Methods Now Support Partial Payment
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx
+
+  CURRENT BEHAVIOR:
+    - Cash: Enter amount → change calculated → always "paid"
+    - GCash: Enter reference → always "paid"
+    - COD/Pay Later: No amount entered → "not_paid"
+
+  NEW BEHAVIOR:
+    - Cash: Enter amount → if amount < total → show "Balance: ₱XX"
+            → ask "Proceed with partial payment?" → payment_status = partial
+    - GCash: Enter amount + reference → if amount < total → same partial logic
+    - COD: Enter amount → if amount < total → partial
+           (COD means they pay on delivery, but maybe not full amount)
+    - Pay Later: No payment now → balance = total → "not_paid"
+                 When they come back to pay → enter amount → can be partial
+
+  Changes needed:
+  1. PAYMENT_METHODS array — NO changes (keep same 4 methods)
+
+  2. Cash payment modal:
+     - Already has "Amount Tendered" input
+     - ADD: If amount < total, show warning + balance info instead of change
+     - ADD: "Partial Payment" indicator
+     - CHANGE: Allow placing order even if amount < total
+
+  3. GCash payment modal:
+     - ADD: "Amount Paid" input field (currently assumes full amount)
+     - Keep reference number + proof upload
+     - If amount < total → show balance
+
+  4. COD payment modal:
+     - ADD: Optional "Down Payment" input (₱0 = full COD, >₱0 = partial)
+     - If down payment entered → show balance
+
+  5. Pay Later modal:
+     - Keep as-is (no payment now, full balance)
+
+  6. handlePlaceOrder():
+     - Send amount_tendered for all methods (not just cash)
+     - Backend determines paid/partial/not_paid based on amount vs total
+
+  7. Receipt/Order confirmation:
+     - Show "Amount Paid: ₱XX" / "Balance: ₱XX" if partial
+     - Show "PARTIALLY PAID" badge
+
+  8. REQUIRE customer for partial payments:
+     - If amount < total AND no customer selected → force customer selection
+     - Walk-in full payment = OK without customer
+     - Walk-in partial payment = MUST select/create customer (to track balance)
+
+  B. ★★★ NEW PAGE: PAYMENTS PAGE (Payment Verification & Management)
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/admin/Payments/Payments.jsx (NEW)
+
+  This is the CENTRAL HUB for managing all payment transactions.
+
+  PURPOSE:
+    - Verify GCash payments (check if money actually arrived)
+    - Hold suspicious payments for review
+    - Cancel/reject fake or incorrect payments
+    - See all payment activity across all orders
+
+  PAGE LAYOUT:
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  📊 Stats Cards                                                    │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐│
+  │  │Total     │ │Pending   │ │On Hold   │ │Verified  │ │Cancelled ││
+  │  │Payments  │ │Payments  │ │Payments  │ │Today     │ │This Month││
+  │  │₱125,000  │ │12        │ │3         │ │45        │ │2         ││
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘│
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Filters: [Status ▼] [Method ▼] [Date Range] [Customer Search]   │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Tabs: All | Pending | On Hold | Verified | Cancelled             │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │                                                                    │
+  │  DataTable:                                                        │
+  │  ┌────────┬────────────┬──────────┬────────┬────────┬───────────┐ │
+  │  │Date    │Order       │Customer  │Amount  │Method  │Status     │ │
+  │  ├────────┼────────────┼──────────┼────────┼────────┼───────────┤ │
+  │  │Apr 20  │ORD-...-045 │Juan Cruz │₱500    │GCash   │⏳ Pending │ │
+  │  │        │            │          │        │        │[✓][⏸][✕] │ │
+  │  ├────────┼────────────┼──────────┼────────┼────────┼───────────┤ │
+  │  │Apr 20  │ORD-...-044 │Maria S.  │₱1,000  │Cash    │✅ Verified│ │
+  │  ├────────┼────────────┼──────────┼────────┼────────┼───────────┤ │
+  │  │Apr 19  │ORD-...-043 │Pedro R.  │₱300    │GCash   │⚠️ On Hold│ │
+  │  │        │            │          │        │        │[✓][✕]    │ │
+  │  └────────┴────────────┴──────────┴────────┴────────┴───────────┘ │
+  │                                                                    │
+  │  Action buttons per row:                                           │
+  │    [✓] Verify  — confirm payment is legit                         │
+  │    [⏸] Hold    — flag for review (enter reason)                   │
+  │    [✕] Cancel  — reject payment (enter reason, reverses balance)  │
+  │    [👁] View   — see proof images, reference, details             │
+  │                                                                    │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  View Payment Modal:
+    - Payment details: amount, method, date, who recorded it
+    - If GCash: reference number, proof image(s) with zoom
+    - Order info: transaction_id, customer, order total, current balance
+    - Payment status timeline
+    - Action buttons: Verify / Hold / Cancel
+
+  Hold Modal:
+    - Reason input (required): "Reference not matching", "No GCash received",
+      "Suspicious proof image", custom text
+    - Confirm button
+
+  Cancel Modal:
+    - Reason input (required)
+    - Warning: "This will add ₱500 back to the order's balance"
+    - Confirm button
+
+  C. SALES PAGE — Updated for Partial Payments
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/admin/Sales/Sales.jsx
+
+  Changes:
+  1. Payment status filter: add 'partial' option
+     Current:  '' | 'paid' | 'not_paid'
+     New:      '' | 'paid' | 'partial' | 'not_paid'
+
+  2. DataTable columns — show balance info:
+     - For partial orders: "₱500 / ₱1,000" (paid / total)
+     - Progress bar showing payment completion %
+     - Payment status badge: 🟡 Partial
+
+  3. "Record Payment" button:
+     - Already exists for not_paid orders
+     - Now also shows for 'partial' orders
+     - Opens modal with:
+       - Current balance remaining
+       - Amount input (max = balance)
+       - Payment method (cash/gcash)
+       - GCash reference + proof (if gcash)
+       - Payment history table below the form
+
+  4. View order modal:
+     - Show payment summary: "Paid: ₱500 | Balance: ₱500"
+     - Show list of all payments with status (verified/pending/held/cancelled)
+     - Link to "View in Payments page" for detailed management
+
+  D. CUSTOMER PAGE — Balance Tracking
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/admin/Partners/Customer.jsx
+
+  Changes:
+  1. New action button per customer row: 💰 "Balances"
+     - Shows badge with outstanding balance amount
+     - Only appears if customer has balance > 0
+
+  2. Customer Balance Modal (on click):
+     ┌─────────────────────────────────────────────────────────────┐
+     │  Juan Cruz — Outstanding Balance: ₱1,500                  │
+     ├─────────────────────────────────────────────────────────────┤
+     │  Tabs: Outstanding Orders | Payment History | Completed    │
+     ├─────────────────────────────────────────────────────────────┤
+     │  Outstanding Orders:                                        │
+     │  ┌───────────────┬───────┬──────┬─────────┬──────────────┐ │
+     │  │Order          │Total  │Paid  │Balance  │Action        │ │
+     │  ├───────────────┼───────┼──────┼─────────┼──────────────┤ │
+     │  │ORD-...-045    │₱1,000 │₱500  │₱500     │[Record Pay]  │ │
+     │  │ORD-...-040    │₱2,000 │₱1,000│₱1,000   │[Record Pay]  │ │
+     │  └───────────────┴───────┴──────┴─────────┴──────────────┘ │
+     │                                                             │
+     │  Payment History:                                           │
+     │  • Apr 20 — ₱500 Cash (ORD-045) ✅ Verified               │
+     │  • Apr 18 — ₱1,000 GCash (ORD-040) ✅ Verified            │
+     │  • Apr 15 — ₱500 GCash (ORD-040) ⏳ Pending               │
+     └─────────────────────────────────────────────────────────────┘
+
+  3. Stats cards update:
+     - Add: "Total Receivables: ₱XX,XXX"
+     - Add: "Customers with Balance: X"
+
+  E. CUSTOMER PORTAL (Customer-facing)
+  -----------------------------------------------------------------------
+  Files: react_frontend/src/pages/customer/*
+
+  Changes:
+    - My Orders: show "Balance: ₱XX" on partially paid orders
+    - Payment history per order (read-only)
+    - (Optional future) Self-service payment via GCash
+
+  F. SIDEBAR / NAVIGATION
+  -----------------------------------------------------------------------
+  File: react_frontend/src/components/layout/Sidebar.jsx (or similar)
+
+  Changes:
+    - Add "Payments" menu item under Sales section
+    - Icon: CreditCard or Banknote
+    - Route: /admin/payments
+    - Badge: number of pending payments needing verification
+
+  G. ROUTER
+  -----------------------------------------------------------------------
+  File: react_frontend/src/router.jsx (or App.jsx / routes config)
+
+  Changes:
+    - Add route: /admin/payments → Payments component
+    - Accessible by: super_admin, admin, staff
+
+================================================================================
+  5. ROLE-BASED ACCESS & PERMISSIONS
+================================================================================
+
+  | Action                        | Super Admin | Admin | Staff | Customer |
+  |-------------------------------|-------------|-------|-------|----------|
+  | Place order (any method)      |     ✓       |   ✓   |   ✓   |    ✗    |
+  | Accept partial payment in POS |     ✓       |   ✓   |   ✓   |    ✗    |
+  | Record subsequent payment     |     ✓       |   ✓   |   ✓   |    ✗    |
+  | View Payments page            |     ✓       |   ✓   |   ✓   |    ✗    |
+  | Verify payment                |     ✓       |   ✓   |   ✗   |    ✗    |
+  | Hold payment                  |     ✓       |   ✓   |   ✗   |    ✗    |
+  | Cancel/reject payment         |     ✓       |   ✓   |   ✗   |    ✗    |
+  | View customer balances        |     ✓       |   ✓   |   ✓   |  Own    |
+  | View payment history          |     ✓       |   ✓   |   ✓   |  Own    |
+
+  Key decisions:
+  - Staff CAN record payments (they're at the counter)
+  - Staff CANNOT verify/hold/cancel (that's admin responsibility)
+  - Verification is an ADMIN task — they check if GCash money arrived
+  - All payment actions are logged in audit trail
+
+================================================================================
+  6. AFFECTED FILES — COMPLETE LIST
+================================================================================
+
+  BACKEND (Laravel):
+  ------------------
+  NEW FILES:
+    ☐ database/migrations/2026_04_21_000001_add_partial_payment_support.php
+    ☐ app/Models/Payment.php
+    ☐ app/Http/Controllers/PaymentController.php
+    ☐ app/Http/Resources/PaymentResource.php
+
+  MODIFIED FILES:
+    ☐ app/Models/Sale.php
+        → Add amount_paid, balance_remaining to fillable/casts
+        → Add payments() relationship
+        → Add helper methods
+    ☐ app/Services/SaleService.php
+        → Modify createOrder() for all-method partial support
+        → Add recordPayment(), verifyPayment(), holdPayment(),
+          cancelPayment(), getPaymentHistory(), getCustomerBalances(),
+          getAllOutstandingBalances()
+    ☐ app/Http/Controllers/SaleController.php
+        → Add recordPayment(), paymentHistory() methods
+        → Modify storeOrder() to handle partial amounts
+    ☐ app/Http/Controllers/CustomerController.php
+        → Add balances() method
+    ☐ app/Http/Resources/SaleResource.php
+        → Add amount_paid, balance_remaining, payments_count,
+          has_pending_payments fields
+    ☐ routes/api.php
+        → Add /sales/{id}/payment, /sales/{id}/payments routes
+        → Add /payments prefix group (index, verify, hold, cancel, show)
+        → Add /customers/{id}/balances route
+
+  FRONTEND (React):
+  -----------------
+  NEW FILES:
+    ☐ src/pages/admin/Payments/Payments.jsx (NEW PAGE)
+
+  MODIFIED FILES:
+    ☐ src/pages/shared/PointOfSale/PointOfSale.jsx
+        → Cash: allow amount < total (partial)
+        → GCash: add amount field + allow partial
+        → COD: add optional down payment
+        → Require customer for partial payments
+        → Receipt: show balance info
+    ☐ src/pages/admin/Sales/Sales.jsx
+        → Add 'partial' payment status filter
+        → Show balance info in DataTable
+        → Update Record Payment modal for partial
+        → Show payment history in view modal
+    ☐ src/pages/admin/Partners/Customer.jsx
+        → Add "Balances" action button per customer
+        → Add Customer Balance Modal
+        → Add receivables stats cards
+    ☐ src/components/layout/Sidebar.jsx (or navigation component)
+        → Add "Payments" menu item + badge
+    ☐ src/router.jsx (or route config)
+        → Add /admin/payments route
+    ☐ src/api/index.js (or API client)
+        → Add: recordPayment(), getPayments(), verifyPayment(),
+          holdPayment(), cancelPayment(), getCustomerBalances()
+
+  POSSIBLY AFFECTED:
+    ☐ src/pages/customer/* (show own balance, payment history)
+    ☐ src/pages/admin/Dashboard/* (total receivables stat)
+    ☐ Email templates (payment receipt, payment cancelled notification)
+    ☐ Notification system (new payment, verification needed, payment held)
+    ☐ Audit trail (all payment actions logged)
+    ☐ Receipt/print template (show partial payment + balance)
+    ☐ PWA offline sync (queue payment recordings)
+
+================================================================================
+  7. RECOMMENDED UI/UX PLACEMENT
+================================================================================
+
+  WHERE THINGS LIVE:
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                         SIDEBAR                                  │
+  │  ───────────────────────                                        │
+  │  Dashboard                                                       │
+  │  ───────────────────────                                        │
+  │  Point of Sale          ← Place orders (with partial payment)   │
+  │  ───────────────────────                                        │
+  │  Orders / Sales         ← View orders, record payments,        │
+  │                            see balance per order                 │
+  │  ★ Payments             ← NEW! Verify/hold/cancel payments,    │
+  │     (🔴 3 pending)         manage all payment transactions      │
+  │  ───────────────────────                                        │
+  │  Partners                                                        │
+  │    └ Customers          ← View customer balances,               │
+  │                            record payment per customer          │
+  │    └ Suppliers                                                   │
+  │    └ Drivers                                                     │
+  │  ───────────────────────                                        │
+  └──────────────────────────────────────────────────────────────────┘
+
+  SUMMARY — Who uses what:
+
+  Cashier/Staff (POS):
+    → Place order → accept full or partial payment → done
+
+  Admin (Sales page):
+    → See order → see balance → "Record Payment" → record amount
+
+  Admin (Payments page):
+    → See all payments → verify GCash → hold suspicious → cancel bad ones
+
+  Admin (Customer page):
+    → Click customer → "View Balances" → see all pending orders + totals
+    → Record payment directly from customer's balance view
+
+  Customer (Portal):
+    → See own orders → see balance remaining → view payment history
+
+================================================================================
+  8. BUSINESS RULES & EDGE CASES
+================================================================================
+
+  RULES:
+  1. Partial payment orders MUST have a customer linked
+     (cannot track balance for anonymous walk-ins)
+  2. Full cash/gcash payments = auto verified (no admin review needed)
+  3. GCash payments start as 'pending' → admin must verify
+  4. When a payment is CANCELLED:
+     → If it was 'verified': reverse the amount on the sale
+        (amount_paid -= X, balance_remaining += X)
+     → If it was 'pending' or 'on_hold': no reversal needed
+        (it was never counted toward amount_paid)
+  5. Payment amount must be > 0 and ≤ balance_remaining
+  6. Change is only calculated when amount_tendered > total (full payment)
+     For partial: change = 0 (they're not overpaying)
+  7. An order can have payments with MIXED methods:
+     1st: ₱500 Cash, 2nd: ₱300 GCash, 3rd: ₱200 Cash
+  8. The sale's payment_method field remains the ORIGINAL method chosen
+     Individual method per payment is in the payments table
+  9. Voiding an order with payments:
+     → Only allow void if all payments are in initial state
+     → Or: void the order + mark all payments as 'cancelled'
+
+  EDGE CASES:
+  1. Customer overpays on last payment:
+     → amount > balance_remaining → cap at balance, calculate change
+  2. Admin cancels a verified payment on a fully-paid order:
+     → payment_status reverts from 'paid' to 'partial'
+     → balance_remaining recalculated
+  3. Multiple pending GCash payments at same time:
+     → Each tracked independently, verify individually
+  4. Order total changes after partial payment:
+     → Recalculate balance_remaining = new_total - amount_paid
+     → Could result in overpayment if total decreased — handle as credit
+  5. Offline POS records a payment:
+     → Queue it, sync when online, handle conflicts
+  6. Receipt reprint:
+     → Always show CURRENT balance (not original)
+
+  GCASH VERIFICATION WORKFLOW:
+  -----------------------------------------------------------------------
+  1. Staff at POS: Customer pays ₱500 via GCash
+  2. Staff enters reference number + uploads proof screenshot
+  3. Payment created with status = 'pending'
+  4. Sale balance NOT updated yet (pending verification)
+  5. Admin opens Payments page → sees pending payment
+  6. Admin checks GCash records → money received?
+     YES → Click "Verify" → sale.amount_paid += ₱500, balance -= ₱500
+     NO  → Click "Hold" (reason: "No GCash received, checking...")
+           → Later: "Cancel" (reason: "Payment not received")
+           → OR later: "Verify" (found it, it was delayed)
+
+  ALTERNATIVE (SIMPLER) APPROACH FOR GCASH:
+  -----------------------------------------------------------------------
+  If you don't want GCash payments to be pending by default:
+  - All payments (Cash AND GCash) start as 'verified'
+  - Admin can LATER hold/cancel if they find a problem
+  - This is simpler but less "safe" — money is counted before verified
+  - RECOMMENDED for small business: use this simpler approach
+  - The Payments page then becomes a REVIEW tool, not a gatekeeping tool
+
+================================================================================
+  9. IMPLEMENTATION PRIORITY / PHASES
+================================================================================
+
+  PHASE 1 — Core Backend + POS (MVP):
+  -----------------------------------------------------------------------
+    ✦ Migration: add amount_paid, balance_remaining to sales + create
+      payments table + backfill existing data
+    ✦ Payment model with relationships
+    ✦ Modify Sale model (fields, casts, relationship)
+    ✦ SaleService: modify createOrder() for partial support
+    ✦ SaleService: add recordPayment()
+    ✦ SaleController: add recordPayment(), paymentHistory()
+    ✦ Routes: /sales/{id}/payment, /sales/{id}/payments
+    ✦ POS (PointOfSale.jsx): allow partial amounts for cash/gcash/cod
+    ✦ POS: require customer for partial payments
+    ✦ POS: show balance on receipt
+
+  PHASE 2 — Payments Page + Sales Updates:
+  -----------------------------------------------------------------------
+    ✦ PaymentController (index, verify, hold, cancel, show)
+    ✦ PaymentResource
+    ✦ Routes: /payments/*
+    ✦ NEW: Payments.jsx page (full page with stats, table, modals)
+    ✦ Sidebar: add Payments link + pending badge
+    ✦ Router: add /admin/payments route
+    ✦ Sales.jsx: add 'partial' filter, balance display, payment history
+    ✦ Sales.jsx: update Record Payment modal for partial
+
+  PHASE 3 — Customer Balances:
+  -----------------------------------------------------------------------
+    ✦ CustomerController: balances() method
+    ✦ Routes: /customers/{id}/balances
+    ✦ Customer.jsx: "Balances" action button
+    ✦ Customer.jsx: Balance modal (outstanding, history, completed tabs)
+    ✦ Customer.jsx: receivables stats cards
+    ✦ SaleResource: include payment summary fields
+
+  PHASE 4 — Polish & Extras:
+  -----------------------------------------------------------------------
+    ✦ Customer portal: show own balance + payment history
+    ✦ Notifications: payment recorded, verified, cancelled
+    ✦ Audit trail: log all payment verification actions
+    ✦ Dashboard: total receivables stat card
+    ✦ Email: payment receipt, balance reminder
+    ✦ Receipt reprint: show current balance
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

@@ -1,0 +1,739 @@
+================================================================================
+         PREDICTIVE ANALYSIS & MACHINE LEARNING REGRESSION GUIDE
+              For KJP Ricemill Capstone Project Integration
+================================================================================
+
+TABLE OF CONTENTS
+─────────────────
+  1. What Is Predictive Analysis?
+  2. What Is Machine Learning Regression?
+  3. Types of Regression Models
+  4. How It Works (Step by Step)
+  5. How to Integrate It Into Your Capstone (KJP Ricemill)
+  6. How to Implement It (Code & Architecture)
+  7. How to Train the Model
+  8. How to Evaluate & Validate the Model
+  9. How to Manage & Maintain the Model
+  10. Tools & Libraries
+  11. Example: Sales Forecasting for KJP Ricemill
+  12. Best Practices & Tips
+
+
+================================================================================
+1. WHAT IS PREDICTIVE ANALYSIS?
+================================================================================
+
+Predictive analysis uses historical data, statistical algorithms, and machine
+learning techniques to forecast future outcomes. Instead of just looking at
+what happened in the past (descriptive analytics), predictive analysis answers
+the question: "What is likely to happen next?"
+
+In the context of KJP Ricemill:
+  - Predict future sales revenue based on past order data
+  - Forecast product demand to optimize inventory levels
+  - Estimate procurement needs based on seasonal trends
+  - Predict processing output based on input patterns
+  - Anticipate drying process durations based on weather/batch data
+
+Key Benefits:
+  • Better decision-making through data-driven insights
+  • Reduced waste and overstock situations
+  • Improved resource allocation and planning
+  • Early identification of trends and anomalies
+  • Competitive advantage through proactive operations
+
+
+================================================================================
+2. WHAT IS MACHINE LEARNING REGRESSION?
+================================================================================
+
+Regression is a type of supervised machine learning where the model learns from
+labeled training data (input-output pairs) to predict continuous numerical
+values. Unlike classification (which predicts categories like "Yes/No"),
+regression predicts quantities like sales amounts, prices, or durations.
+
+How It Differs from Traditional Statistics:
+  Traditional: You define the formula (e.g., y = mx + b)
+  ML Regression: The algorithm LEARNS the relationship from data automatically
+
+Key Concepts:
+  • Features (X): Input variables (e.g., month, product type, quantity, day of week)
+  • Target (y): The value you want to predict (e.g., total sales, demand)
+  • Training: Feeding historical data to the model so it learns patterns
+  • Prediction: Using the trained model to forecast new/unseen data
+  • Error/Loss: The difference between predicted and actual values
+
+
+================================================================================
+3. TYPES OF REGRESSION MODELS
+================================================================================
+
+A. LINEAR REGRESSION (Simplest, good starting point)
+   ─────────────────────────────────────────────────
+   - Assumes a straight-line relationship between features and target
+   - Formula: y = b₀ + b₁x₁ + b₂x₂ + ... + bₙxₙ
+   - Best for: Simple trends, few features, interpretable results
+   - Example: Predicting monthly sales based on month number
+
+B. POLYNOMIAL REGRESSION
+   ───────────────────────
+   - Extension of linear regression with polynomial terms
+   - Can capture curved/non-linear relationships
+   - Best for: Seasonal patterns, cyclical data
+   - Example: Sales that rise in summer and fall in winter
+
+C. RIDGE REGRESSION (L2 Regularization)
+   ─────────────────────────────────────
+   - Linear regression + penalty for large coefficients
+   - Prevents overfitting when you have many features
+   - Best for: Multiple correlated features
+
+D. LASSO REGRESSION (L1 Regularization)
+   ─────────────────────────────────────
+   - Similar to Ridge but can zero out unimportant features
+   - Useful for feature selection
+   - Best for: When you suspect some features are irrelevant
+
+E. RANDOM FOREST REGRESSION
+   ─────────────────────────
+   - Ensemble of decision trees, averages their predictions
+   - Handles non-linear relationships well
+   - Best for: Complex datasets, many features, robust predictions
+
+F. GRADIENT BOOSTING (XGBoost, LightGBM)
+   ───────────────────────────────────────
+   - Builds trees sequentially, each correcting previous errors
+   - Often the best-performing model for tabular data
+   - Best for: High accuracy requirements, competition-winning models
+
+RECOMMENDED FOR CAPSTONE: Start with Linear Regression for simplicity and
+interpretability. If accuracy is insufficient, try Random Forest or XGBoost.
+
+NOTE: The KJP Ricemill system currently implements linear regression
+DIRECTLY in PHP (SalesPredictionService) without a separate Python service.
+This approach works well for the current dataset size and provides
+daily/weekly/monthly sales predictions with confidence intervals.
+The Python microservice architecture below is documented for reference
+if a more advanced ML pipeline is needed in the future.
+
+
+================================================================================
+4. HOW IT WORKS (STEP BY STEP)
+================================================================================
+
+Step 1: COLLECT DATA
+  └─> Gather historical records (sales, orders, inventory movements, etc.)
+
+Step 2: CLEAN & PREPARE DATA
+  └─> Handle missing values, remove outliers, format dates
+  └─> Convert categorical data to numbers (encoding)
+
+Step 3: FEATURE ENGINEERING
+  └─> Create meaningful input variables from raw data
+  └─> Examples: day_of_week, month, is_holiday, rolling_average
+
+Step 4: SPLIT DATA
+  └─> Training set (70-80%): Used to train the model
+  └─> Testing set (20-30%): Used to evaluate performance
+
+Step 5: TRAIN THE MODEL
+  └─> Feed training data to the algorithm
+  └─> The model learns patterns and relationships
+
+Step 6: EVALUATE THE MODEL
+  └─> Test predictions against actual values
+  └─> Calculate error metrics (MAE, MSE, R², RMSE)
+
+Step 7: TUNE & OPTIMIZE
+  └─> Adjust hyperparameters for better performance
+  └─> Try different feature combinations
+
+Step 8: DEPLOY & PREDICT
+  └─> Integrate trained model into your application
+  └─> Make real-time or batch predictions
+
+Step 9: MONITOR & RETRAIN
+  └─> Periodically retrain with new data
+  └─> Monitor prediction accuracy over time
+
+
+================================================================================
+5. HOW TO INTEGRATE IT INTO YOUR CAPSTONE (KJP Ricemill)
+================================================================================
+
+ARCHITECTURE OVERVIEW:
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  React Frontend │◄───►│  Laravel Backend  │◄───►│  Python ML API  │
+│  (Dashboard UI) │     │  (REST API)       │     │  (Flask/FastAPI) │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                              │                         │
+                              ▼                         ▼
+                        ┌──────────┐            ┌──────────────┐
+                        │  MySQL   │            │ Trained Model│
+                        │ Database │            │  (.pkl file) │
+                        └──────────┘            └──────────────┘
+
+OPTION A: Python Microservice (RECOMMENDED)
+─────────────────────────────────────────────
+  1. Create a separate Python Flask/FastAPI service for ML
+  2. Laravel calls the Python API when predictions are needed
+  3. React displays the predictions on the dashboard
+
+  Pros: Full access to Python ML ecosystem (scikit-learn, pandas, numpy)
+  Cons: Extra service to manage, requires Python on server
+
+OPTION B: PHP-Based (Using Libraries)
+──────────────────────────────────────
+  1. Use PHP-ML library directly in Laravel
+  2. Install via: composer require php-ai/php-ml
+  3. No separate service needed
+
+  Pros: Simpler deployment, everything in one codebase
+  Cons: Limited ML capabilities, fewer algorithms, slower
+
+OPTION C: Pre-trained Model with Python Script
+───────────────────────────────────────────────
+  1. Train the model offline using Python
+  2. Export model as a .pkl or .joblib file
+  3. Create a simple Python script that Laravel calls via shell_exec()
+  4. Pass data as JSON, receive predictions as JSON
+
+  Pros: Simple, no extra server needed
+  Cons: shell_exec() can be slow, security considerations
+
+RECOMMENDED APPROACH FOR CAPSTONE: Option A (Python FastAPI microservice)
+or Option C (pre-trained model with Python script) for simplicity.
+
+
+================================================================================
+6. HOW TO IMPLEMENT IT (CODE & ARCHITECTURE)
+================================================================================
+
+── A. PYTHON ML SERVICE (FastAPI) ─────────────────────────────────────────────
+
+Directory Structure:
+  ml_service/
+  ├── main.py              # FastAPI app entry point
+  ├── requirements.txt     # Python dependencies
+  ├── models/
+  │   ├── sales_model.pkl  # Trained model file
+  │   └── scaler.pkl       # Feature scaler
+  ├── training/
+  │   ├── train_model.py   # Training script
+  │   └── data_prep.py     # Data preparation utilities
+  └── utils/
+      └── features.py      # Feature engineering functions
+
+requirements.txt:
+  fastapi==0.104.1
+  uvicorn==0.24.0
+  scikit-learn==1.3.2
+  pandas==2.1.3
+  numpy==1.26.2
+  joblib==1.3.2
+  mysql-connector-python==8.2.0
+
+main.py (FastAPI Service):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ from fastapi import FastAPI                                        │
+  │ from pydantic import BaseModel                                     │
+  │ import joblib                                                      │
+  │ import numpy as np                                                 │
+  │ import pandas as pd                                                │
+  │                                                                    │
+  │ app = FastAPI()                                                    │
+  │                                                                    │
+  │ # Load trained model and scaler                                    │
+  │ model = joblib.load('models/sales_model.pkl')                      │
+  │ scaler = joblib.load('models/scaler.pkl')                          │
+  │                                                                    │
+  │ class PredictionRequest(BaseModel):                                │
+  │     month: int                                                     │
+  │     year: int                                                      │
+  │     product_id: int = None                                         │
+  │     periods: int = 6  # How many periods to forecast               │
+  │                                                                    │
+  │ @app.post("/predict/sales")                                        │
+  │ def predict_sales(request: PredictionRequest):                     │
+  │     predictions = []                                               │
+  │     for i in range(request.periods):                               │
+  │         month = ((request.month - 1 + i) % 12) + 1                 │
+  │         year = request.year + ((request.month - 1 + i) // 12)      │
+  │         features = np.array([[year, month, month**2]])              │
+  │         features_scaled = scaler.transform(features)               │
+  │         pred = model.predict(features_scaled)[0]                   │
+  │         predictions.append({                                       │
+  │             "year": year,                                          │
+  │             "month": month,                                        │
+  │             "predicted_sales": round(max(0, pred), 2)              │
+  │         })                                                         │
+  │     return {"predictions": predictions}                            │
+  │                                                                    │
+  │ @app.get("/health")                                                │
+  │ def health_check():                                                │
+  │     return {"status": "healthy", "model_loaded": model is not None}│
+  └─────────────────────────────────────────────────────────────────────┘
+
+── B. LARAVEL INTEGRATION ─────────────────────────────────────────────────────
+
+Create a Service Class (app/Services/PredictionService.php):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ <?php                                                              │
+  │ namespace App\Services;                                            │
+  │                                                                    │
+  │ use Illuminate\Support\Facades\Http;                               │
+  │                                                                    │
+  │ class PredictionService                                            │
+  │ {                                                                  │
+  │     private string $mlServiceUrl;                                  │
+  │                                                                    │
+  │     public function __construct()                                  │
+  │     {                                                              │
+  │         $this->mlServiceUrl = config('services.ml.url',            │
+  │                               'http://localhost:8001');             │
+  │     }                                                              │
+  │                                                                    │
+  │     public function predictSales(                                  │
+  │         int $month, int $year, int $periods = 6                    │
+  │     ): array {                                                     │
+  │         $response = Http::post(                                    │
+  │             "{$this->mlServiceUrl}/predict/sales",                 │
+  │             [                                                      │
+  │                 'month' => $month,                                 │
+  │                 'year' => $year,                                   │
+  │                 'periods' => $periods,                             │
+  │             ]                                                      │
+  │         );                                                         │
+  │                                                                    │
+  │         if ($response->successful()) {                             │
+  │             return $response->json();                              │
+  │         }                                                          │
+  │                                                                    │
+  │         return ['error' => 'ML service unavailable'];              │
+  │     }                                                              │
+  │ }                                                                  │
+  └─────────────────────────────────────────────────────────────────────┘
+
+Create an API Controller (app/Http/Controllers/PredictionController.php):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ <?php                                                              │
+  │ namespace App\Http\Controllers;                                    │
+  │                                                                    │
+  │ use App\Services\PredictionService;                                │
+  │ use Illuminate\Http\Request;                                       │
+  │                                                                    │
+  │ class PredictionController extends Controller                      │
+  │ {                                                                  │
+  │     public function salesForecast(                                 │
+  │         Request $request, PredictionService $service               │
+  │     ) {                                                            │
+  │         $validated = $request->validate([                          │
+  │             'month' => 'required|integer|between:1,12',            │
+  │             'year'  => 'required|integer|min:2020',                │
+  │             'periods' => 'integer|between:1,24',                   │
+  │         ]);                                                        │
+  │                                                                    │
+  │         $result = $service->predictSales(                          │
+  │             $validated['month'],                                   │
+  │             $validated['year'],                                    │
+  │             $validated['periods'] ?? 6                             │
+  │         );                                                         │
+  │                                                                    │
+  │         return response()->json($result);                          │
+  │     }                                                              │
+  │ }                                                                  │
+  └─────────────────────────────────────────────────────────────────────┘
+
+Add Route (routes/api.php):
+  Route::post('/predictions/sales', [PredictionController::class, 'salesForecast']);
+
+── C. REACT FRONTEND INTEGRATION ──────────────────────────────────────────────
+
+API Call (src/api/predictions.js):
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ import apiClient from './apiClient';                               │
+  │                                                                    │
+  │ export const getSalesForecast = async (month, year, periods = 6)   │
+  │   => {                                                             │
+  │   const response = await apiClient.post('/predictions/sales', {    │
+  │     month, year, periods                                           │
+  │   });                                                              │
+  │   return response.data;                                            │
+  │ };                                                                 │
+  └─────────────────────────────────────────────────────────────────────┘
+
+Dashboard Component Usage:
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ // In Dashboard.jsx or a dedicated Forecast component              │
+  │ const [forecast, setForecast] = useState([]);                      │
+  │ const [loading, setLoading] = useState(false);                     │
+  │                                                                    │
+  │ const fetchForecast = async () => {                                │
+  │   setLoading(true);                                                │
+  │   try {                                                            │
+  │     const now = new Date();                                        │
+  │     const data = await getSalesForecast(                           │
+  │       now.getMonth() + 1,                                         │
+  │       now.getFullYear(),                                           │
+  │       6                                                            │
+  │     );                                                             │
+  │     setForecast(data.predictions || []);                           │
+  │   } catch (err) {                                                  │
+  │     console.error('Forecast error:', err);                         │
+  │   } finally {                                                      │
+  │     setLoading(false);                                             │
+  │   }                                                                │
+  │ };                                                                 │
+  │                                                                    │
+  │ // Display in a LineChart with dashed line for predictions         │
+  │ const forecastChartData = forecast.map(f => ({                     │
+  │   label: `${months[f.month - 1]} ${f.year}`,                      │
+  │   value: f.predicted_sales                                        │
+  │ }));                                                               │
+  └─────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+7. HOW TO TRAIN THE MODEL
+================================================================================
+
+── TRAINING SCRIPT (training/train_model.py) ──────────────────────────────────
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ import pandas as pd                                                │
+  │ import numpy as np                                                 │
+  │ from sklearn.model_selection import train_test_split               │
+  │ from sklearn.preprocessing import StandardScaler                   │
+  │ from sklearn.linear_model import LinearRegression                  │
+  │ from sklearn.ensemble import RandomForestRegressor                 │
+  │ from sklearn.metrics import mean_absolute_error, r2_score          │
+  │ import joblib                                                      │
+  │ import mysql.connector                                             │
+  │                                                                    │
+  │ # ─── 1. Connect to Database & Fetch Data ───                     │
+  │ conn = mysql.connector.connect(                                    │
+  │     host='localhost',                                              │
+  │     database='kjp_ricemill',                                       │
+  │     user='root',                                                   │
+  │     password=''                                                    │
+  │ )                                                                  │
+  │                                                                    │
+  │ query = """                                                        │
+  │     SELECT                                                         │
+  │         DATE(created_at) as sale_date,                             │
+  │         SUM(total_amount) as daily_sales,                          │
+  │         COUNT(*) as transaction_count,                             │
+  │         SUM(total_quantity) as total_units                         │
+  │     FROM orders                                                    │
+  │     WHERE status = 'delivered'                                     │
+  │     GROUP BY DATE(created_at)                                      │
+  │     ORDER BY sale_date                                             │
+  │ """                                                                │
+  │ df = pd.read_sql(query, conn)                                     │
+  │ conn.close()                                                       │
+  │                                                                    │
+  │ # ─── 2. Feature Engineering ───                                   │
+  │ df['sale_date'] = pd.to_datetime(df['sale_date'])                  │
+  │ df['year'] = df['sale_date'].dt.year                               │
+  │ df['month'] = df['sale_date'].dt.month                             │
+  │ df['day_of_week'] = df['sale_date'].dt.dayofweek                   │
+  │ df['day_of_month'] = df['sale_date'].dt.day                        │
+  │ df['week_of_year'] = df['sale_date'].dt.isocalendar().week         │
+  │ df['is_weekend'] = (df['day_of_week'] >= 5).astype(int)            │
+  │ df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)            │
+  │ df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)            │
+  │ df['rolling_7d'] = df['daily_sales'].rolling(7, min_periods=1)     │
+  │                                         .mean()                    │
+  │ df['rolling_30d'] = df['daily_sales'].rolling(30, min_periods=1)   │
+  │                                          .mean()                   │
+  │                                                                    │
+  │ # ─── 3. Prepare Features & Target ───                             │
+  │ feature_columns = [                                                │
+  │     'year', 'month', 'day_of_week', 'day_of_month',               │
+  │     'is_weekend', 'month_sin', 'month_cos',                       │
+  │     'rolling_7d', 'rolling_30d', 'transaction_count'              │
+  │ ]                                                                  │
+  │ X = df[feature_columns].values                                     │
+  │ y = df['daily_sales'].values                                       │
+  │                                                                    │
+  │ # ─── 4. Split Data ───                                            │
+  │ X_train, X_test, y_train, y_test = train_test_split(              │
+  │     X, y, test_size=0.2, random_state=42, shuffle=False           │
+  │ )                                                                  │
+  │ # Note: shuffle=False for time series data!                        │
+  │                                                                    │
+  │ # ─── 5. Scale Features ───                                        │
+  │ scaler = StandardScaler()                                          │
+  │ X_train_scaled = scaler.fit_transform(X_train)                     │
+  │ X_test_scaled = scaler.transform(X_test)                           │
+  │                                                                    │
+  │ # ─── 6. Train Models ───                                          │
+  │ # Model A: Linear Regression                                      │
+  │ lr_model = LinearRegression()                                      │
+  │ lr_model.fit(X_train_scaled, y_train)                              │
+  │ lr_pred = lr_model.predict(X_test_scaled)                          │
+  │                                                                    │
+  │ # Model B: Random Forest                                          │
+  │ rf_model = RandomForestRegressor(                                  │
+  │     n_estimators=100, random_state=42, max_depth=10                │
+  │ )                                                                  │
+  │ rf_model.fit(X_train_scaled, y_train)                              │
+  │ rf_pred = rf_model.predict(X_test_scaled)                          │
+  │                                                                    │
+  │ # ─── 7. Evaluate Models ───                                       │
+  │ print("=== Linear Regression ===")                                 │
+  │ print(f"  MAE:  {mean_absolute_error(y_test, lr_pred):.2f}")       │
+  │ print(f"  R²:   {r2_score(y_test, lr_pred):.4f}")                  │
+  │                                                                    │
+  │ print("=== Random Forest ===")                                     │
+  │ print(f"  MAE:  {mean_absolute_error(y_test, rf_pred):.2f}")       │
+  │ print(f"  R²:   {r2_score(y_test, rf_pred):.4f}")                  │
+  │                                                                    │
+  │ # ─── 8. Save Best Model ───                                       │
+  │ best_model = rf_model  # Choose the better performer              │
+  │ joblib.dump(best_model, '../models/sales_model.pkl')               │
+  │ joblib.dump(scaler, '../models/scaler.pkl')                        │
+  │ print("Model saved successfully!")                                 │
+  └─────────────────────────────────────────────────────────────────────┘
+
+TRAINING WORKFLOW:
+  1. Install Python 3.9+ and pip
+  2. Create virtual environment: python -m venv venv
+  3. Activate: venv\Scripts\activate (Windows) or source venv/bin/activate
+  4. Install dependencies: pip install -r requirements.txt
+  5. Run training: python training/train_model.py
+  6. Model files are saved to models/ directory
+  7. Start the API: uvicorn main:app --host 0.0.0.0 --port 8001
+
+WHEN TO RETRAIN:
+  • Every month (recommended for active businesses)
+  • When you accumulate 50+ new data points
+  • When prediction accuracy drops below acceptable threshold
+  • After significant business changes (new products, pricing changes)
+
+
+================================================================================
+8. HOW TO EVALUATE & VALIDATE THE MODEL
+================================================================================
+
+KEY METRICS:
+─────────────
+
+  MAE (Mean Absolute Error)
+    • Average absolute difference between predicted and actual values
+    • Easy to interpret: "On average, predictions are off by ₱X"
+    • Lower is better
+
+  MSE (Mean Squared Error)
+    • Average of squared differences
+    • Penalizes large errors more heavily
+    • Lower is better
+
+  RMSE (Root Mean Squared Error)
+    • Square root of MSE
+    • Same units as target variable
+    • Lower is better
+
+  R² Score (Coefficient of Determination)
+    • How much variance the model explains (0 to 1)
+    • 1.0 = perfect predictions
+    • 0.0 = model is no better than predicting the mean
+    • > 0.7 is generally considered good
+    • > 0.9 is excellent
+
+  MAPE (Mean Absolute Percentage Error)
+    • Error as a percentage
+    • "Predictions are off by X% on average"
+    • < 10% is excellent, < 20% is good
+
+VALIDATION TECHNIQUES:
+  1. Train/Test Split (simple, use 80/20)
+  2. Cross-Validation (K-Fold, more robust)
+  3. Time Series Split (for sequential data, most appropriate here)
+
+SIGNS OF A GOOD MODEL:
+  ✓ R² > 0.7 on test data
+  ✓ MAE is within acceptable business range
+  ✓ Predictions make logical sense (no negative sales, etc.)
+  ✓ Performance is similar on training and test data (no overfitting)
+
+SIGNS OF PROBLEMS:
+  ✗ Training R² = 0.99 but Test R² = 0.3 → Overfitting
+  ✗ Both R² values very low → Underfitting or insufficient features
+  ✗ Predictions are always the same value → Model hasn't learned
+  ✗ Negative values where impossible → Need post-processing (clip to 0)
+
+
+================================================================================
+9. HOW TO MANAGE & MAINTAIN THE MODEL
+================================================================================
+
+A. VERSION CONTROL
+   ────────────────
+   • Save each trained model with a version number and date:
+     sales_model_v1_2024-12-01.pkl
+     sales_model_v2_2025-01-15.pkl
+   • Track which model is currently in production
+   • Keep a changelog of what changed between versions
+
+B. MONITORING (After Deployment)
+   ─────────────────────────────
+   • Log every prediction with input data, predicted value, and timestamp
+   • When actual values become available, compare against predictions
+   • Track accuracy metrics over time (weekly/monthly reports)
+   • Set up alerts if accuracy drops below threshold
+
+C. DATA PIPELINE
+   ──────────────
+   • Automate data extraction from MySQL to the training pipeline
+   • Schedule periodic retraining (e.g., monthly cron job)
+   • Validate new data before training (check for anomalies)
+
+D. RETRAINING SCHEDULE
+   ────────────────────
+   • Manual: Run training script when new data is available
+   • Automated: Set up a scheduled task/cron job
+   • Triggered: Retrain when accuracy drops below threshold
+   • For capstone: Manual retraining is sufficient
+
+E. FALLBACK STRATEGY
+   ──────────────────
+   • If ML service is down, show historical averages instead
+   • Keep the previous model version as backup
+   • Display confidence intervals alongside predictions
+   • Clearly label predictions vs actual data in the UI
+
+
+================================================================================
+10. TOOLS & LIBRARIES
+================================================================================
+
+PYTHON (ML Core):
+  • scikit-learn    - ML algorithms (regression, classification, clustering)
+  • pandas          - Data manipulation and analysis
+  • numpy           - Numerical computing
+  • matplotlib      - Data visualization (for analysis)
+  • seaborn         - Statistical data visualization
+  • joblib          - Model serialization (save/load)
+
+PYTHON (API):
+  • FastAPI          - Modern, fast web framework for ML APIs
+  • Flask            - Lightweight alternative to FastAPI
+  • uvicorn          - ASGI server for FastAPI
+  • pydantic         - Data validation
+
+PHP (Alternative):
+  • php-ai/php-ml    - Machine learning library for PHP
+                       (Limited but works without Python)
+  • composer require php-ai/php-ml
+
+DATABASE:
+  • mysql-connector-python  - Connect Python to MySQL
+  • SQLAlchemy              - ORM for Python (optional)
+
+JAVASCRIPT (Frontend Visualization):
+  • Chart.js / recharts     - Already in your project for charts
+  • Use dashed lines for predicted vs solid for actual data
+
+DEVELOPMENT TOOLS:
+  • Jupyter Notebook   - Interactive Python for exploration
+  • Google Colab       - Free cloud-based Jupyter (great for testing)
+  • VS Code            - With Python extension for development
+
+
+================================================================================
+11. EXAMPLE: SALES FORECASTING FOR KJP RICEMILL
+================================================================================
+
+USE CASE: Predict monthly sales revenue for the next 6 months
+
+DATA SOURCES:
+  • orders table (status = 'delivered')
+  • products table (for product-level forecasting)
+  • Historical sales patterns
+
+FEATURES TO USE:
+  ┌──────────────────┬─────────────────────────────────────────────┐
+  │ Feature          │ Description                                 │
+  ├──────────────────┼─────────────────────────────────────────────┤
+  │ year             │ Calendar year (2023, 2024, ...)             │
+  │ month            │ Month number (1-12)                         │
+  │ day_of_week      │ 0=Monday, 6=Sunday                         │
+  │ is_weekend       │ 1 if Saturday/Sunday, else 0               │
+  │ month_sin/cos    │ Cyclical encoding for seasonality          │
+  │ rolling_7d_avg   │ 7-day moving average of sales              │
+  │ rolling_30d_avg  │ 30-day moving average of sales             │
+  │ product_count    │ Number of distinct products ordered         │
+  │ customer_count   │ Number of unique customers                  │
+  │ prev_month_sales │ Last month's total sales (lag feature)     │
+  └──────────────────┴─────────────────────────────────────────────┘
+
+DISPLAY ON DASHBOARD:
+  • Show a LineChart with:
+    - Solid line: Actual historical sales (last 6-12 months)
+    - Dashed line: Predicted future sales (next 6 months)
+  • Stats cards showing:
+    - "Predicted Next Month Sales: ₱XX,XXX"
+    - "Expected Growth: +X%"
+    - "Forecast Confidence: High/Medium/Low"
+
+MINIMAL DATA REQUIREMENT:
+  • At least 30-50 data points (daily records) for basic predictions
+  • 6+ months of data recommended for monthly forecasting
+  • More data = better predictions (1+ years is ideal)
+
+HANDLING LIMITED DATA (Common in Capstone):
+  If you don't have enough real data:
+  1. Use the database seeder to generate realistic historical data
+  2. Create 12-24 months of synthetic order records
+  3. Include seasonal patterns (higher sales in harvest months)
+  4. Add realistic variance (not perfectly linear)
+
+
+================================================================================
+12. BEST PRACTICES & TIPS
+================================================================================
+
+FOR THE CAPSTONE SPECIFICALLY:
+  ✓ Start simple — Linear Regression first, then upgrade if needed
+  ✓ Focus on one prediction target (e.g., monthly sales)
+  ✓ Display predictions clearly with labels like "Forecast" or "Predicted"
+  ✓ Show confidence indicators (High/Medium/Low accuracy)
+  ✓ Include both the prediction chart and a simple data table
+  ✓ Document your model's accuracy in the capstone paper
+  ✓ Prepare to explain how the model works during the defense
+
+GENERAL ML BEST PRACTICES:
+  ✓ Always split data into train/test before any processing
+  ✓ Never train on test data (data leakage)
+  ✓ Scale/normalize features for linear models
+  ✓ Handle missing values before training
+  ✓ Use cross-validation for robust evaluation
+  ✓ Start with fewer features, add more if needed
+  ✓ Clip predictions to valid ranges (e.g., no negative sales)
+  ✓ Log predictions for future comparison with actuals
+
+COMMON MISTAKES TO AVOID:
+  ✗ Using future data to predict the past (data leakage)
+  ✗ Overfitting by using too complex a model on small data
+  ✗ Ignoring seasonality in time series data
+  ✗ Not scaling features (causes some algorithms to fail)
+  ✗ Shuffling time series data (breaks temporal order)
+  ✗ Expecting perfect predictions (real world is noisy)
+  ✗ Not having a fallback when the ML service is unavailable
+
+QUICK START CHECKLIST:
+  [ ] Install Python 3.9+
+  [ ] Create ml_service/ directory in project root
+  [ ] pip install fastapi uvicorn scikit-learn pandas numpy joblib
+  [ ] Write training script to pull data from MySQL
+  [ ] Train model and save .pkl files
+  [ ] Create FastAPI endpoint for predictions
+  [ ] Add Laravel service to call Python API
+  [ ] Add React component to display forecast chart
+  [ ] Test end-to-end: React → Laravel → Python → Prediction → Display
+  [ ] Document accuracy metrics and methodology
+
+================================================================================
+  END OF GUIDE — Prepared for KJP Ricemill Capstone Project
+================================================================================

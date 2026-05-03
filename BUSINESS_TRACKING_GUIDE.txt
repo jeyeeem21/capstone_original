@@ -1,0 +1,392 @@
+================================================================================
+KJP RICEMILL — BUSINESS TRACKING GUIDE
+Full Scenario: Procurement → Production → Sales → Returns → Income Tracking
+================================================================================
+
+TABLE OF CONTENTS:
+  1. OVERVIEW — Money Flow Summary
+  2. SCENARIO: Procurement to Sales (Step by Step)
+  3. TRACKING YOUR MONEY — Where It Goes and Comes Back
+  4. TRACKING INCOME & REVENUE
+  5. MANAGING RETURNED STOCK — Damaged, Lost, or Unsellable Items
+  6. UNDERSTANDING YOUR LOSSES
+  7. KEY REPORTS & WHERE TO FIND THEM
+
+================================================================================
+1. OVERVIEW — MONEY FLOW SUMMARY
+================================================================================
+
+Your money flows through this pipeline:
+
+  MONEY GOES OUT                         MONEY COMES BACK
+  ──────────────                         ─────────────────
+  Buy raw paddy (Procurement)     →      Sell finished product (Sales)
+  Pay for drying (Drying Process) →      Collect payment (Cash/GCash/COD)
+  Mill into rice (Processing)     →      Delivery fees (if delivery order)
+                 ↓
+  Package into products (Distribution)
+                 ↓
+  Products ready for sale (Stock)
+
+  FORMULA:
+  ┌──────────────────────────────────────────────────────────┐
+  │ Profit = Revenue (from sales) − Production Cost          │
+  │                                                          │
+  │ Production Cost = Procurement Cost + Drying Cost         │
+  │ Revenue = Σ (sold items × selling price) - discounts     │
+  │                + delivery fees                           │
+  └──────────────────────────────────────────────────────────┘
+
+================================================================================
+2. SCENARIO: PROCUREMENT TO SALES (Step by Step)
+================================================================================
+
+Here's a REAL scenario showing how ₱50,000 worth of paddy becomes sellable rice:
+
+STEP 1: PROCUREMENT (Buy Raw Paddy)
+────────────────────────────────────
+  You buy raw paddy from a supplier:
+    Supplier:     Juan's Farm
+    Quantity:     1,000 kg of paddy
+    Price/kg:     ₱25.00
+    Total Cost:   ₱25,000
+
+  → System creates a Procurement record
+  → Status: Pending
+  → Your money spent so far: ₱25,000
+
+STEP 2: DRYING (Dry the Paddy)
+──────────────────────────────
+  You send the paddy for drying:
+    Drying Method:   Machine drying
+    Sacks:           40
+    Price/sack/day:  ₱50
+    Days:            3
+    Drying Cost:     40 × ₱50 × 3 = ₱6,000
+
+  → System creates a DryingProcess record
+  → Status: Drying → Dried
+  → Your money spent so far: ₱25,000 + ₱6,000 = ₱31,000
+
+STEP 3: PROCESSING / MILLING (Mill into Rice)
+──────────────────────────────────────────────
+  The dried paddy goes through milling:
+    Input:       1,000 kg dried paddy
+    Output:      600 kg milled rice (≈60% yield is normal)
+    Byproducts:  bran, husk (not tracked in system)
+
+  → System creates a Processing record
+  → Status: Processing → Completed
+  → output_kg = 600
+  → No additional cost tracked here (milling cost = your own operation)
+
+STEP 4: DISTRIBUTION (Package into Products)
+─────────────────────────────────────────────
+  You distribute the milled rice into sellable products:
+    Product:      Premium Rice 25kg    → 20 bags (500 kg)
+    Product:      Premium Rice 5kg     → 20 bags (100 kg)
+    Total:        600 kg distributed
+
+  What the system calculates for each product:
+
+  Premium Rice 25kg (20 bags):
+    Cost traced:  ₱31,000 × (500/600) = ₱25,833.33
+    Cost/unit:    ₱25,833.33 / 20 = ₱1,291.67 per bag
+    Selling price: ₱1,500 per bag
+    Profit/unit:  ₱1,500 − ₱1,291.67 = ₱208.33
+    Margin:       13.9%
+
+  Premium Rice 5kg (20 bags):
+    Cost traced:  ₱31,000 × (100/600) = ₱5,166.67
+    Cost/unit:    ₱5,166.67 / 20 = ₱258.33 per bag
+    Selling price: ₱350 per bag
+    Profit/unit:  ₱350 − ₱258.33 = ₱91.67
+    Margin:       26.2%
+
+  → System creates StockLog records with ALL cost fields populated
+  → Products now have stock available for sale
+
+STEP 5: SELLING (Create Orders / POS)
+──────────────────────────────────────
+  Customer buys from POS or delivery order:
+    5× Premium Rice 25kg  = 5 × ₱1,500 = ₱7,500
+    10× Premium Rice 5kg  = 10 × ₱350  = ₱3,500
+    Subtotal:  ₱11,000
+    Discount:  −₱500
+    Delivery:  +₱200
+    ─────────────────
+    TOTAL:     ₱10,700
+
+  → System creates a Sale record (status: pending)
+  → When processed (pending → processing): stock is DEDUCTED
+  → When delivered/completed: counted as REVENUE
+
+STEP 6: PAYMENT COLLECTION
+──────────────────────────
+  Payment methods and when money is collected:
+
+  Cash     → Paid immediately at POS          → payment_status = 'paid'
+  GCash    → Paid immediately (with proof)    → payment_status = 'paid'
+  COD      → Paid on delivery                 → payment_status = 'not_paid' until marked paid
+  Pay Later → Paid at a future date           → payment_status = 'not_paid' until marked paid
+
+  → Admin can mark unpaid orders as "Paid" in the Orders page
+  → paid_at timestamp is recorded when payment is confirmed
+
+================================================================================
+3. TRACKING YOUR MONEY — WHERE IT GOES AND COMES BACK
+================================================================================
+
+MONEY OUT (Expenses):
+─────────────────────
+  ┌─────────────────────────┬───────────────────────────────────────────┐
+  │ Expense Type            │ Where It's Tracked                       │
+  ├─────────────────────────┼───────────────────────────────────────────┤
+  │ Raw material (paddy)    │ procurements.total_cost                  │
+  │                         │ = quantity_kg × price_per_kg             │
+  ├─────────────────────────┼───────────────────────────────────────────┤
+  │ Drying cost             │ drying_processes.total_price             │
+  │                         │ = sacks × price × days                   │
+  ├─────────────────────────┼───────────────────────────────────────────┤
+  │ Per-unit production cost│ stock_logs.cost_per_unit                 │
+  │                         │ = (procurement_cost + drying_cost) / qty │
+  └─────────────────────────┴───────────────────────────────────────────┘
+
+  Note: Milling/processing operational costs (electricity, labor, machine
+  maintenance) are NOT tracked in the system. These are your overhead costs
+  that you should track separately.
+
+MONEY IN (Revenue):
+───────────────────
+  ┌─────────────────────────┬───────────────────────────────────────────┐
+  │ Income Type             │ Where It's Tracked                       │
+  ├─────────────────────────┼───────────────────────────────────────────┤
+  │ Product sales           │ sales.total (per order)                  │
+  │                         │ = subtotal - discount + delivery_fee     │
+  ├─────────────────────────┼───────────────────────────────────────────┤
+  │ Delivery fees           │ sales.delivery_fee                       │
+  ├─────────────────────────┼───────────────────────────────────────────┤
+  │ Total revenue           │ Dashboard: SUM of delivered/completed    │
+  │                         │ sales only (voided/returned excluded)    │
+  └─────────────────────────┴───────────────────────────────────────────┘
+
+PROFIT TRACKING:
+────────────────
+  Per-product profit is calculated at DISTRIBUTION time and saved in stock_logs:
+    profit_per_unit = selling_price − cost_per_unit
+    profit_margin   = (profit_per_unit / selling_price) × 100
+
+  You can check this in:
+    → Products page → Cost Analysis section (per product)
+    → Stock distribution modal (shows cost breakdown before you distribute)
+
+================================================================================
+4. TRACKING INCOME & REVENUE
+================================================================================
+
+WHAT COUNTS AS REVENUE:
+  ✅ Delivered orders     → counted
+  ✅ Completed orders     → counted
+  ❌ Pending orders       → NOT counted (not yet fulfilled)
+  ❌ Processing orders    → NOT counted (in progress)
+  ❌ Shipped orders       → NOT counted (not confirmed received)
+  ❌ Voided orders        → NOT counted (cancelled/reversed)
+  ❌ Returned orders      → NOT counted (returned by customer)
+
+DASHBOARD STATS:
+  Total Revenue         = SUM of all delivered + completed order totals
+  Current Month Revenue = Same, filtered to current month
+  Average Order Value   = Total Revenue / Number of fulfilled orders
+  Total Items Sold      = SUM of item quantities from fulfilled orders
+  Month-over-Month %    = ((this month − last month) / last month) × 100
+
+PAYMENT STATUS TRACKING:
+  The system tracks whether you've actually RECEIVED the money:
+
+  payment_status = 'paid'     → Money received
+  payment_status = 'not_paid' → Money not yet received (COD / Pay Later)
+
+  IMPORTANT: An order being "delivered" does NOT mean you've been paid!
+  For COD orders, the driver collects payment — admin must mark as "Paid"
+  in the system to confirm the money was received.
+
+  Filter orders by payment status in the Orders page to see:
+    → Which delivered orders are still unpaid
+    → Which customers owe you money
+
+================================================================================
+5. MANAGING RETURNED STOCK — DAMAGED, LOST, OR UNSELLABLE ITEMS
+================================================================================
+
+When a customer returns items, you have TWO choices:
+
+OPTION A: RESTOCK (Item is still sellable)
+──────────────────────────────────────────
+  If the returned product is in good condition:
+    1. Customer requests return → status: return_requested
+    2. You accept & assign pickup driver → status: picking_up
+    3. Driver picks up & you mark returned → status: returned
+    4. Go to the returned order → click "Restock Items"
+    5. Select WHICH items to restock and HOW MANY
+    6. Stock is added back to inventory
+
+  Example:
+    Customer returned 3× Premium Rice 25kg
+    All 3 bags are in good condition
+    → Restock all 3 → stock goes from 15 to 18
+
+OPTION B: DON'T RESTOCK (Item is damaged / unsellable)
+──────────────────────────────────────────────────────
+  If the returned product is damaged, spoiled, or unsellable:
+    1. Complete the return flow (steps 1-3 above)
+    2. Do NOT restock those items (skip step 4, or restock only the good ones)
+    3. The non-restocked items are effectively WRITTEN OFF as a loss
+
+  Example:
+    Customer returned 3× Premium Rice 25kg
+    1 bag is fine, 2 bags are damaged (torn, wet, etc.)
+    → Restock only 1 → stock goes from 15 to 16
+    → The 2 damaged bags are YOUR LOSS
+
+PARTIAL RESTOCK (Some items ok, some damaged):
+───────────────────────────────────────────────
+  The system supports per-item selective restocking:
+    - You can restock specific items and specific quantities
+    - Each item can only be restocked ONCE (no double-restocking)
+    - Restocked quantity is capped at the original order quantity
+
+  Example:
+    Order had: 5× Rice 25kg + 10× Rice 5kg
+    Customer returns everything
+    After inspection:
+      → Restock 5× Rice 25kg (all good)
+      → Restock 7× Rice 5kg (3 bags damaged)
+      → 3× Rice 5kg bags = YOUR LOSS
+
+================================================================================
+6. UNDERSTANDING YOUR LOSSES
+================================================================================
+
+TYPES OF LOSSES IN YOUR BUSINESS:
+──────────────────────────────────
+
+  1. DAMAGED RETURNS (Not restocked)
+     ─────────────────────────────────
+     What: Customer returned items that are damaged/unsellable
+     Impact: You lose the production cost of those items
+     How to calculate:
+       Loss = non-restocked quantity × cost_per_unit (from stock_logs)
+     Where to see: Compare returned order's items vs restocked items
+       → Items NOT restocked = your loss
+
+     Example:
+       2 bags not restocked × ₱1,291.67 cost/unit = ₱2,583.34 loss
+
+  2. VOIDED SALES
+     ──────────────
+     What: Order was cancelled/voided after processing (stock already deducted)
+     Impact: No direct financial loss (stock is restored)
+     BUT: If items were perishable or time-sensitive, the delay is indirect cost
+     Note: Voiding ALWAYS restores ALL items to stock
+
+  3. CANCELLED ORDERS (After Processing)
+     ─────────────────────────────────────
+     What: Order cancelled after stock was already deducted
+     Impact: Stock is restored, but you lost time/effort
+     No direct financial loss in the system
+
+  4. UNPAID ORDERS (COD / Pay Later that never pay)
+     ────────────────────────────────────────────────
+     What: Delivered orders where payment was never collected
+     Impact: You gave away products without receiving money
+     How to track: Filter Orders by payment_status = 'not_paid'
+     Your loss = order total of unpaid delivered orders
+
+  5. PRODUCTION LOSSES (Yield loss during milling)
+     ───────────────────────────────────────────────
+     What: Not all paddy becomes rice (60-65% yield is normal)
+     Impact: Built into your cost calculation automatically
+     The system tracks input_kg vs output_kg in Processing
+     Bran, husk, and other byproducts are not tracked
+
+  6. UNTRACKED OVERHEAD COSTS
+     ─────────────────────────
+     What: Electricity, labor, machine maintenance, fuel, packaging
+     Impact: These reduce your ACTUAL profit but aren't in the system
+     Recommendation: Track these separately and subtract from system profit
+
+HOW TO MANAGE DAMAGED GOODS — BEST PRACTICE:
+─────────────────────────────────────────────
+
+  When you receive returned items:
+
+  Step 1: INSPECT each item thoroughly
+  Step 2: SEPARATE into two piles: sellable vs unsellable
+  Step 3: RESTOCK only the sellable items in the system
+  Step 4: DO NOT RESTOCK the damaged items
+          → They are your loss. The system accounts for this by:
+             - The sale's revenue is NOT counted (returned order)
+             - The stock is NOT restored for damaged items
+             - Your cost_per_unit on those items is effectively lost
+
+  Step 5: DOCUMENT the damage
+          → Use the return notes and return proof images
+          → Take photos of damaged items before disposal
+          → This creates a paper trail for your records
+
+  IS IT YOUR LOSS?
+  ────────────────
+  YES — damaged returned items that cannot be restocked are YOUR LOSS as the
+  business owner. This is a normal cost of doing business. The system handles
+  this gracefully:
+
+    Revenue side:  Returned orders are NOT counted as revenue
+    Stock side:    Only items you explicitly restock go back to inventory
+    Cost side:     The production cost of non-restocked items is absorbed
+
+  Your actual loss per damaged item = cost_per_unit from the stock distribution
+  (procurement cost + drying cost, divided by units produced)
+
+  If you want to track total losses over time, compare:
+    → Total items in returned orders vs Total items restocked
+    → The DIFFERENCE × average cost_per_unit = your total return losses
+
+================================================================================
+7. KEY REPORTS & WHERE TO FIND THEM
+================================================================================
+
+  ┌──────────────────────────┬──────────────────────────────────────────┐
+  │ What You Want to Know    │ Where to Find It                        │
+  ├──────────────────────────┼──────────────────────────────────────────┤
+  │ Total revenue            │ Dashboard → Revenue card                │
+  │ Monthly revenue trend    │ Dashboard → Revenue card (% change)     │
+  │ Per-product profit       │ Products → Cost Analysis                │
+  │ Production cost/unit     │ Stock distribution modal (at dist time) │
+  │                          │ OR Products → Cost Analysis             │
+  │ Cost breakdown           │ Stock Logs → cost fields per entry      │
+  │ Unpaid orders            │ Orders → Filter by "Not Paid"          │
+  │ Returned orders          │ Orders → "Returned" tab                 │
+  │ Items not restocked      │ Returned order → check restocked items  │
+  │ Procurement costs        │ Procurement page → total_cost column    │
+  │ Drying costs             │ Drying page → total_price column        │
+  │ Top selling products     │ Dashboard → Top Products section        │
+  │ Stock levels             │ Products page → stock column            │
+  │ Low stock alerts         │ Products with stock ≤ stock_floor       │
+  │ Void history             │ Orders → "Voided" tab                   │
+  │ Sales growth             │ Dashboard → Product Sales Growth        │
+  └──────────────────────────┴──────────────────────────────────────────┘
+
+================================================================================
+SUMMARY — QUICK REFERENCE
+================================================================================
+
+  Procurement → Drying → Processing → Distribution → Stock → Sale → Revenue
+
+  Cost tracked:     procurement_cost + drying_cost = production cost
+  Revenue tracked:  only delivered/completed orders
+  Profit formula:   selling_price − cost_per_unit = profit_per_unit
+  Damaged returns:  don't restock = your loss (production cost absorbed)
+  Unpaid orders:    filter by payment_status to track receivables
+  Void:             stock fully restored, sale not counted as revenue
+
+================================================================================

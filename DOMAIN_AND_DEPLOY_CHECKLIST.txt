@@ -1,0 +1,92 @@
+================================================================================
+  ⏳ WAITING FOR DOMAIN — KJP RICEMILL CAPSTONE DEPLOYMENT
+================================================================================
+
+  STATUS: Need to buy domain first before deploying!
+
+================================================================================
+  STEP 0: BUY YOUR DOMAIN FIRST
+================================================================================
+
+  WHERE TO BUY (recommended):
+  - Hostinger:   https://www.hostinger.com  (cheapest, easiest since server is there)
+  - Namecheap:   https://www.namecheap.com
+  - GoDaddy:     https://www.godaddy.com
+
+  TIPS:
+  - Buy from Hostinger → domain + hosting managed in ONE place (easier!)
+  - Look for .com or .net domain
+  - Example names you can use:
+       kjpricemill.com
+       kjpricemillinventory.com
+       kjp-ricemill.com
+
+  💡 Buying from Hostinger = no need to manually point DNS, it's automatic!
+
+================================================================================
+  ONCE YOU HAVE YOUR DOMAIN — FILL THIS IN
+================================================================================
+
+  My domain:           ________________________________
+                       (e.g. kjpricemill.com)
+
+  My API subdomain:    api.________________________________
+                       (e.g. api.kjpricemill.com)
+
+  Hostinger SSH host:  ________________________________
+  Hostinger SSH user:  ________________________________
+
+  DB full name:        u_________________________
+  DB full username:    u_________________________
+  DB password:         ________________________________
+
+  Gmail for emails:    ________________________________
+  Gmail App Password:  ________________________________
+
+================================================================================
+  AFTER BUYING DOMAIN — GO FOLLOW THESE STEPS IN ORDER:
+================================================================================
+
+  ✅  DEPLOY_STEPS_CAPSTONE.txt  ← your full step-by-step guide
+
+  Quick reminder of the 8 steps:
+
+  [ ] Step 1  — Push latest code to GitHub
+                cd "c:\laragon\www\Jeyeeem's files\Capstone\capstone1"
+                git add .
+                git commit -m "Final polish - ready for deployment"
+                git push origin main
+
+  [ ] Step 2  — Hostinger → Databases → Create MySQL database (kjp_ricemill)
+
+  [ ] Step 3  — Hostinger → Domains → Subdomains → Create "api" subdomain
+
+  [ ] Step 4  — Hostinger → Advanced → SSH Access → Turn ON
+
+  [ ] Step 5  — SSH into server → clone repo → create .env → migrate → seed
+
+  [ ] Step 6  — Edit react_frontend/src/api/config.js:
+                  Change:  http://127.0.0.1:8000/api
+                  To:      https://api.YOURDOMAIN.com/api
+                Then: npm run build
+                Then: Upload dist/ to Hostinger public_html/
+                Then: REVERT config.js back to: http://127.0.0.1:8000/api
+
+  [ ] Step 7  — Hostinger → Security → SSL → Install for both domains
+
+  [ ] Step 8  — GitHub Secrets → add SSH_HOST, SSH_PORT, SSH_USERNAME, SSH_PRIVATE_KEY
+                Then: git push → auto-deploy backend forever!
+
+================================================================================
+  AFTER EVERYTHING IS DONE — MARK YOUR LIVE URLS HERE
+================================================================================
+
+  Frontend URL:   https://________________________________
+  Backend URL:    https://api.________________________________
+  GitHub Repo:    https://github.com/Jeyeeem21/capstone1
+
+================================================================================
+  ✅ GOOD LUCK! BUY THAT DOMAIN FIRST HAHAHA 🎉
+================================================================================
+
+

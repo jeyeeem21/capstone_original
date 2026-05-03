@@ -1,0 +1,14 @@
+# Laravel
+laravel_backend/vendor/
+laravel_backend/.env
+laravel_backend/storage/logs/*.log
+laravel_backend/bootstrap/cache/*.php
+
+# React
+react_frontend/node_modules/
+react_frontend/dist/
+react_frontend/.env.production
+
+# OS
+.DS_Store
+Thumbs.db

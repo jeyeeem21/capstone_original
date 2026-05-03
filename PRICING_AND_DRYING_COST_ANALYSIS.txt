@@ -1,0 +1,169 @@
+================================================================================
+  KJP RICE MILL — PRICING, DRYING COST IMPACT & ORDER HANDLING ANALYSIS
+  Date: March 10, 2026
+================================================================================
+
+SCENARIO:
+  A client orders Dinorado 25kg at ₱223. Order is placed with 0 stock, so it 
+  becomes a pending order. The system calculates the total at ₱223 × qty.
+  
+  Later, new rice is procured, dried, and processed. But this time, drying 
+  takes 3–5 days instead of the previous batch's 2 days. Since drying cost = 
+  (sacks × price_per_sack) × days, the drying cost per kg increases, which 
+  raises the overall cost of that batch of rice.
+
+  QUESTION: What happens to the existing order at ₱223?
+
+================================================================================
+  HOW THE SYSTEM CURRENTLY WORKS
+================================================================================
+
+  1. COST CHAIN (per batch of rice):
+     ┌─────────────────────────────────────────────────────────────────────┐
+     │  Procurement Cost    = price_per_kg × quantity_kg (supplier cost)  │
+     │  Drying Cost         = (sacks × price_per_sack) × days            │
+     │  Total Cost          = Procurement Cost + Drying Cost              │
+     │  Cost Per Unit       = Total Cost ÷ number of product units        │
+     │  Profit Per Unit     = Selling Price - Cost Per Unit               │
+     │  Profit Margin %     = (Profit Per Unit ÷ Selling Price) × 100    │
+     └─────────────────────────────────────────────────────────────────────┘
+
+  2. SELLING PRICE:
+     - The product selling price (₱223 for Dinorado 25kg) is SET MANUALLY 
+       by the admin. It is NOT auto-calculated from costs.
+     - It is a FIXED value stored in the products table.
+
+  3. ORDER PRICE LOCKING:
+     - When a client places an order, the unit_price is LOCKED into the 
+       sale_items table at order time.
+     - Even if the admin changes the product price later, existing orders 
+       keep their original price.
+     - This is already implemented in SaleService::createOrder().
+
+  4. STOCK & COST TRACKING:
+     - Each stock addition (from processing → product distribution) creates 
+       a StockLog entry with:
+       • procurement_cost (supplier cost share)
+       • drying_cost (drying cost share)
+       • total_cost
+       • cost_per_unit
+       • profit_per_unit
+       • profit_margin
+     - Different batches of the SAME product can have DIFFERENT costs.
+
+================================================================================
+  THE REAL IMPACT OF HIGHER DRYING COSTS
+================================================================================
+
+  Example with numbers:
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  BATCH A (Previous — 2 days drying)                                   │
+  │  ─────────────────────────────────────────                            │
+  │  Procurement:  500 sacks × ₱9/kg × 50kg = ₱225,000                  │
+  │  Drying:       500 sacks × ₱10/sack × 2 days = ₱10,000              │
+  │  Total Cost:   ₱235,000                                               │
+  │  Output:       20,000 kg → 800 units of 25kg                         │
+  │  Cost/Unit:    ₱235,000 ÷ 800 = ₱293.75                             │
+  │  Sell Price:   ₱223 per 25kg                                          │
+  │  Profit/Unit:  ₱223 - ₱293.75 = -₱70.75 (LOSS!)                     │
+  │                                                                       │
+  │  BATCH B (Next week — 5 days drying)                                  │
+  │  ─────────────────────────────────────────                            │
+  │  Procurement:  500 sacks × ₱9/kg × 50kg = ₱225,000                  │
+  │  Drying:       500 sacks × ₱10/sack × 5 days = ₱25,000              │
+  │  Total Cost:   ₱250,000                                               │
+  │  Output:       20,000 kg → 800 units of 25kg                         │
+  │  Cost/Unit:    ₱250,000 ÷ 800 = ₱312.50                             │
+  │  Sell Price:   ₱223 per 25kg                                          │
+  │  Profit/Unit:  ₱223 - ₱312.50 = -₱89.50 (BIGGER LOSS!)              │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  NOTE: The numbers above are illustrative. Adjust selling price accordingly
+  to ensure profitability.
+
+  KEY INSIGHT:
+  → The SELLING PRICE does not change automatically.
+  → The COST changes based on actual drying days.
+  → The PROFIT MARGIN shrinks (or becomes a loss) silently.
+
+================================================================================
+  WHAT HAPPENS TO EXISTING ORDERS?
+================================================================================
+
+  CURRENT BEHAVIOR:
+  ✅ Order price is LOCKED at ₱223 — this will NOT change.
+  ✅ The system will fulfill the order at ₱223 regardless of cost changes.
+  ✅ The StockLog will correctly show the ACTUAL cost vs selling price.
+  ✅ The profit_margin in StockLog will reflect the real margin (even if 
+     negative).
+
+  THE PROBLEM:
+  ❌ If cost increased significantly, the admin has NO automatic warning
+     that existing pending orders may now be unprofitable.
+  ❌ The admin might not realize they need to raise the selling price until
+     they check the cost analysis.
+
+================================================================================
+  CONCLUSION & RECOMMENDATION
+================================================================================
+
+  OPTION A — KEEP CURRENT BEHAVIOR (RECOMMENDED FOR CAPSTONE)
+  ─────────────────────────────────────────────────────────────
+  The system already handles this correctly:
+  
+  • Orders lock the price at order time → clients pay what they agreed to.
+  • Cost tracking is per-batch → the system knows exactly which batch had
+    higher drying costs.
+  • The Cost Analysis page already shows procurement cost, drying cost, 
+    and profit margins per product/stock entry.
+  • The admin can see the numbers and decide to MANUALLY adjust the 
+    selling price for future orders.
+
+  This is how most real-world businesses work:
+  - You honor existing orders at the agreed price.
+  - You adjust future pricing based on cost changes.
+  - You absorb the loss or negotiate with the client.
+
+  WHY THIS IS FINE:
+  1. The price lock protects clients from surprise price changes.
+  2. The cost tracking gives the admin full visibility into margins.
+  3. The admin has control to update product prices anytime.
+  4. Stock logs show per-entry profit/loss — no data is hidden.
+
+  ─────────────────────────────────────────────────────────────
+  OPTION B — ADD PRICE CHANGE NOTIFICATION (OPTIONAL FUTURE ENHANCEMENT)
+  ─────────────────────────────────────────────────────────────
+  If you want to add a notification system later, here's the approach:
+
+  • When new stock is distributed to a product (from processing), compare 
+    the new cost_per_unit with the current selling_price.
+  • If cost_per_unit > selling_price (negative margin), trigger a warning 
+    notification to the admin:
+    "⚠️ Dinorado 25kg: New stock cost (₱312.50/unit) exceeds selling 
+     price (₱223/unit). Consider updating the price."
+  • Optionally show pending orders that would be affected.
+  • The admin then decides: raise price, keep price, or cancel orders.
+
+  This is NOT necessary for the capstone but would be a nice improvement.
+
+================================================================================
+  SUMMARY
+================================================================================
+
+  Q: What happens to existing orders when drying cost increases?
+  A: NOTHING. The order price is already locked. The system correctly 
+     tracks that this batch has higher cost, and the profit margin in 
+     StockLog reflects the actual numbers. The admin sees the real 
+     margins in Cost Analysis and can adjust future selling prices.
+
+  Q: Should we notify clients about price changes?  
+  A: No. You honor the locked price. Notify the ADMIN instead if the 
+     cost exceeds the selling price, so they can update future pricing.
+
+  Q: Is the current system broken?
+  A: No. It works exactly as designed. The price-locking mechanism 
+     protects both the business (guaranteed sale) and the client 
+     (guaranteed price). The cost tracking gives full visibility.
+
+================================================================================

@@ -1,0 +1,214 @@
+================================================================================
+                    KJP RICE MILL MANAGEMENT SYSTEM
+                     SYSTEM OBJECTIVES (CAPSTONE)
+================================================================================
+
+
+GENERAL OBJECTIVE:
+    To develop a web-based rice mill management system for KJP Rice Mill
+    that automates and streamlines the end-to-end rice supply chain — from
+    procurement of raw palay through drying, processing, and inventory
+    management to sales, order fulfillment, and delivery — while providing
+    a public-facing e-commerce website and multi-role portals for
+    administrators, staff, clients, and drivers.
+
+
+SPECIFIC OBJECTIVES:
+
+1.  To manage the procurement of raw palay from multiple suppliers,
+    tracking quantity (kilograms and sacks), price per kilogram,
+    total cost, and procurement status with support for inline
+    supplier creation during procurement entry.
+
+2.  To organize procurements into batches by rice variety with
+    auto-generated batch numbers, enabling bulk tracking of
+    total sacks, total kilograms, remaining quantities, and
+    batch-level status management.
+
+3.  To manage and monitor the drying process in two modes —
+    individual procurement drying and batch drying with
+    proportional sack distribution across member procurements —
+    tracking drying days, cost per sack, and drying status with
+    day increment and postponement capabilities.
+
+4.  To manage the rice milling (processing) stage with multi-source
+    drying input support, recording input and output quantities,
+    automatically computing yield percentage and husk waste, and
+    distributing finished output to product inventory upon
+    completion.
+
+5.  To manage rice product inventory with automated stock
+    computation from completed processing output, stock floor
+    thresholds for low-stock alerts, and a comprehensive stock
+    log that records every inventory movement with source
+    traceability.
+
+6.  To monitor stock levels in real time and provide low-stock
+    and out-of-stock alerts, inventory in/out movement charts,
+    historical stock growth tracking, and per-batch cost
+    breakdowns for better inventory visibility.
+
+7.  To manage rice product varieties with name, description,
+    and color attributes, ensuring variety traceability from
+    procurement through batching, drying, processing, to
+    finished product.
+
+8.  To manage supplier records with validated contact information
+    (name, contact person, phone, email, address) and maintain
+    a per-supplier procurement history.
+
+9.  To manage customer records with validated contact information,
+    email verification via verification codes, customer account
+    creation with login credentials, and a per-customer order
+    history.
+
+10. To provide an administrative dashboard with key performance
+    indicators (revenue, orders, customers, products, stock
+    totals), revenue trend charts (daily, weekly, monthly,
+    bi-annual, annual), processing pipeline visualization,
+    inventory health breakdown, payment method distribution,
+    order status summaries, and recent activity feeds.
+
+11. To provide a client portal where customers can browse
+    products, search and filter by variety, manage a shopping
+    cart with quantity controls and promo code support, view
+    pricing breakdowns (subtotal, discount, delivery fee,
+    total), and place orders online.
+
+12. To provide a driver portal where delivery personnel can
+    view assigned deliveries with priority indicators, start
+    and complete deliveries, report failed deliveries, add
+    delivery notes with photo/camera capture, and track
+    personal delivery performance statistics.
+
+13. To provide a staff portal with a Point of Sale (POS) module
+    for processing walk-in transactions, a daily sales summary
+    dashboard, low-stock alert monitoring, stock distribution
+    visualization, and a recent activity feed.
+
+14. To manage sales and orders through an 11-status workflow
+    (Pending, Processing, Shipped, Delivered, Completed,
+    Return Requested, Picking Up, Returned, Cancelled, Voided)
+    with automatic stock deduction on processing and stock
+    restoration on cancellation.
+
+15. To support multiple payment methods (Cash, GCash, Cash on
+    Delivery, Pay Later) with payment proof upload capability,
+    payment status tracking, and a password-protected void
+    transaction feature with audit logging.
+
+16. To manage delivery assignments with auto-generated delivery
+    numbers, driver selection, customer destination tracking,
+    priority levels (Low, Normal, High, Urgent), delivery
+    status progression (Pending, In Transit, Delivered), and
+    proof-of-delivery documentation.
+
+17. To integrate address autocomplete and distance calculation
+    using the OpenRouteService API for estimating delivery
+    distances from the warehouse and computing delivery fees
+    based on configurable shipping rates.
+
+18. To implement a return and refund management system that
+    supports return requests with reason and proof submission,
+    admin acceptance or rejection, driver assignment for pickup
+    scheduling, return completion tracking, and selective item
+    restocking back into inventory.
+
+19. To manage staff records including name, email, phone, role
+    assignment, position (Secretary, Driver), position-specific
+    fields (truck plate number for drivers), date hired, and
+    active/inactive status.
+
+20. To manage driver records with license number, vehicle type,
+    plate number, contact details, delivery statistics, and
+    active/inactive status tracking.
+
+21. To implement role-based access control with five distinct
+    user roles — Super Admin, Admin, Staff, Client, and Driver —
+    each with separate portals, navigation structures, and
+    permission-scoped API access enforced through Sanctum
+    token-based authentication with role abilities.
+
+22. To implement a Content Management System (CMS) that allows
+    the admin to update the public website's home page hero
+    section, about page content, and contact information
+    without requiring code changes.
+
+23. To provide a public-facing website with a Home page
+    (hero section, feature highlights, company statistics,
+    testimonials), About page (mission, vision, values,
+    company timeline, team profiles), Products page
+    (browsable product catalog with stock status), and
+    Contact page (business information, inquiry form with
+    categorized inquiry types, FAQ section).
+
+24. To provide a customizable appearance and theme system
+    allowing the admin to configure primary, secondary, and
+    button colors for personalizing the look and feel of the
+    system with dark mode support.
+
+25. To provide a business settings module for managing business
+    name, logo upload, contact details, phone number, address,
+    operating hours, and social media links (Facebook, Twitter,
+    Instagram, LinkedIn).
+
+26. To provide configurable shipping settings including rate
+    per sack, rate per kilometer, base kilometer threshold,
+    and warehouse address for automated delivery fee
+    calculation.
+
+27. To provide an audit trail that logs all system activities
+    (create, update, delete, login, logout, archive, restore)
+    with user identification, IP address, user agent, action
+    description, and detailed JSON change records for full
+    accountability and transparency.
+
+28. To implement a database backup and export feature supporting
+    full SQL database export, database statistics viewing,
+    CSV data export by module, and CSV data import for data
+    security, recovery, and migration.
+
+29. To implement a responsive web design that adapts seamlessly
+    across desktop, tablet, and mobile devices with skeleton
+    loaders, toast notifications, and optimistic UI updates
+    for a smooth user experience.
+
+30. To implement data visualization through interactive charts
+    (line charts for trends, bar charts for comparisons, donut
+    charts for distributions) and sortable, paginated data
+    tables across all dashboards and management pages for
+    data-driven decision making.
+
+31. To implement a cost traceability system that tracks
+    production costs from procurement (price per kilogram)
+    through drying (cost per sack per day) and processing to
+    compute per-unit cost, selling price comparison, profit
+    per unit, and profit margin percentage via the stock log.
+
+32. To implement predictive sales analytics using weighted
+    moving average and linear regression to forecast revenue
+    trends (daily, monthly, yearly), product demand predictions,
+    and stock status projections with configurable forecast
+    horizons and cache-backed performance.
+
+33. To implement a two-tier archiving system — Tier 1 (archive)
+    for soft-archiving records with restoration capability and
+    Tier 2 (soft delete) for permanent removal — with bulk
+    operations, archive statistics, and module-level archive
+    management accessible to Super Admins.
+
+34. To implement product image management allowing the admin to
+    upload, update, and display product photos across the
+    system, POS interface, client shop, and public-facing
+    product catalog pages.
+
+35. To implement a server-side caching strategy using Redis with
+    5-minute TTL and automatic cache invalidation on data
+    mutations, paired with a client-side dual-layer cache
+    (memory and localStorage) with stale-while-revalidate
+    pattern for optimized system performance.
+
+
+================================================================================
+                          END OF OBJECTIVES
+================================================================================

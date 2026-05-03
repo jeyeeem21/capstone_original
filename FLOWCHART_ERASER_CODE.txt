@@ -1,0 +1,366 @@
+================================================================================
+  KJP RICEMILL — ERASER.IO FLOWCHART CODE
+  Copy-paste this into Eraser.io (Code Editor tab)
+  
+  HOW TO USE:
+  1. Go to app.eraser.io
+  2. Click "Canvas" or "Both" view
+  3. Click "Code Editor" tab (top of canvas)
+  4. Delete everything, paste code below
+  5. Diagram auto-renders on left
+================================================================================
+
+
+=== PASTE FROM HERE ===
+
+
+// KJP RICEMILL - SYSTEM FLOWCHART
+
+// ─── ENTRY POINT ───
+Start [shape: oval, icon: play]
+
+// ─── USER ACCESS ───
+Access Website [shape: diamond, icon: globe]
+Public Pages [shape: rectangle, icon: eye]
+Login Page [shape: rectangle, icon: log-in]
+Enter Credentials [shape: rectangle, icon: edit]
+Authenticate [shape: diamond, icon: key]
+Invalid Credentials [shape: rectangle, icon: x-circle, color: red]
+Check Role [shape: diamond, icon: shield]
+
+// ─── ROLE DASHBOARDS ───
+Super Admin Dashboard [shape: rectangle, icon: layout, color: purple]
+Admin Dashboard [shape: rectangle, icon: layout, color: blue]
+Staff Dashboard [shape: rectangle, icon: layout, color: green]
+
+// ─── SUPPLY CHAIN FLOW ───
+Manage Suppliers [shape: rectangle, icon: users, color: orange]
+Create Procurement [shape: rectangle, icon: shopping-cart, color: orange]
+Select Supplier [shape: rectangle, icon: user-check]
+Select Variety [shape: rectangle, icon: layers]
+Enter Quantity and Price [shape: rectangle, icon: edit]
+Calculate Total Cost [shape: rectangle, icon: dollar-sign]
+Assign to Batch [shape: diamond, icon: package]
+Create Batch [shape: rectangle, icon: plus]
+Save Procurement [shape: rectangle, icon: save, color: orange]
+
+// ─── DRYING FLOW ───
+Select Source [shape: diamond, icon: git-merge]
+Single Procurement Source [shape: rectangle, icon: file]
+Batch Source [shape: rectangle, icon: package]
+Create Drying Process [shape: rectangle, icon: sun, color: yellow]
+Drying In Progress [shape: rectangle, icon: clock]
+Increment Day [shape: rectangle, icon: plus-circle]
+Drying Complete [shape: diamond, icon: check-circle]
+Mark as Dried [shape: rectangle, icon: check, color: green]
+Update Procurement Status [shape: rectangle, icon: refresh-cw]
+
+// ─── PROCESSING / MILLING FLOW ───
+Select Dried Sources [shape: rectangle, icon: list, color: blue]
+Create Processing [shape: rectangle, icon: settings, color: blue]
+Start Milling [shape: rectangle, icon: play-circle]
+Milling In Progress [shape: rectangle, icon: loader]
+Enter Output KG [shape: rectangle, icon: edit]
+Calculate Yield [shape: rectangle, icon: percent]
+Complete Processing [shape: rectangle, icon: check-square, color: green]
+
+// ─── STOCK DISTRIBUTION FLOW ───
+Select Product [shape: rectangle, icon: package, color: teal]
+Select Processing Sources [shape: rectangle, icon: git-merge]
+Enter KG to Distribute [shape: rectangle, icon: edit]
+Calculate Units [shape: rectangle, icon: hash]
+Trace Costs [shape: rectangle, icon: trending-up]
+Update Product Stock [shape: rectangle, icon: plus-square, color: green]
+Create Stock Log [shape: rectangle, icon: file-text]
+
+// ─── SALES FLOW ───
+Sale Type [shape: diamond, icon: shopping-bag]
+POS Walk-In [shape: rectangle, icon: monitor, color: green]
+Online Order [shape: rectangle, icon: shopping-cart, color: blue]
+
+// POS Flow
+Add Products to Cart [shape: rectangle, icon: plus]
+Select Customer [shape: diamond, icon: user]
+Create Inline Customer [shape: rectangle, icon: user-plus]
+Existing Customer [shape: rectangle, icon: user-check]
+Select Payment Method [shape: rectangle, icon: credit-card]
+Cash Payment [shape: rectangle, icon: dollar-sign]
+GCash Payment [shape: rectangle, icon: smartphone]
+Enter Amount Tendered [shape: rectangle, icon: edit]
+Calculate Change [shape: rectangle, icon: repeat]
+Complete POS Sale [shape: rectangle, icon: check-circle, color: green]
+Deduct Stock Immediately [shape: rectangle, icon: minus-square, color: red]
+Generate Transaction ID [shape: rectangle, icon: hash]
+
+// Order Flow
+Create Order [shape: rectangle, icon: file-plus]
+Order Pending [shape: rectangle, icon: clock, color: yellow]
+Process Order [shape: rectangle, icon: settings, color: blue]
+Deduct Stock [shape: rectangle, icon: minus-square, color: red]
+Ship Order [shape: diamond, icon: truck]
+Assign Driver [shape: rectangle, icon: truck, color: purple]
+Calculate ETA [shape: rectangle, icon: map-pin]
+Order Shipped [shape: rectangle, icon: send, color: blue]
+Order Delivered [shape: rectangle, icon: check-circle, color: green]
+Cancel Order [shape: rectangle, icon: x-circle, color: red]
+Restore Stock [shape: rectangle, icon: plus-square, color: orange]
+
+// ─── RETURN FLOW ───
+Request Return [shape: rectangle, icon: corner-up-left, color: orange]
+Upload Return Proof [shape: rectangle, icon: camera]
+Review Return [shape: diamond, icon: eye]
+Accept Return [shape: rectangle, icon: check, color: green]
+Reject Return [shape: rectangle, icon: x, color: red]
+Assign Pickup Driver [shape: rectangle, icon: truck]
+Pickup Complete [shape: rectangle, icon: package]
+Mark Returned [shape: rectangle, icon: rotate-ccw, color: green]
+Restock Items [shape: rectangle, icon: plus-square]
+Revert to Delivered [shape: rectangle, icon: arrow-left]
+
+// ─── VOID SALE ───
+Void Sale [shape: diamond, icon: alert-triangle, color: red]
+Is Super Admin [shape: diamond, icon: shield]
+Enter SA Password [shape: rectangle, icon: lock]
+Verify Password [shape: diamond, icon: key]
+Execute Void [shape: rectangle, icon: trash-2, color: red]
+Restore Voided Stock [shape: rectangle, icon: plus-square, color: orange]
+
+// ─── ANALYTICS ───
+View Dashboard [shape: rectangle, icon: bar-chart-2, color: teal]
+Revenue Charts [shape: rectangle, icon: trending-up]
+Processing Charts [shape: rectangle, icon: bar-chart]
+Inventory Health [shape: rectangle, icon: activity]
+Sales Predictions [shape: rectangle, icon: trending-up, color: purple]
+
+// ─── SUPER ADMIN EXCLUSIVE ───
+Audit Trail [shape: rectangle, icon: file-text, color: purple]
+Archives Management [shape: rectangle, icon: archive, color: purple]
+Database Backup [shape: rectangle, icon: database, color: purple]
+Business Settings [shape: rectangle, icon: settings, color: purple]
+Appearance Theme [shape: rectangle, icon: edit, color: purple]
+Website CMS [shape: rectangle, icon: edit-3, color: purple]
+Admin Account Mgmt [shape: rectangle, icon: user-plus, color: purple]
+
+// ─── END ───
+End [shape: oval, icon: square]
+Log Audit Trail [shape: rectangle, icon: file-text, color: gray]
+
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - ENTRY AND AUTHENTICATION
+// ════════════════════════════════════════════════════════════════
+
+Start > Access Website
+Access Website > Public Pages: No Login
+Access Website > Login Page: Login Required
+Login Page > Enter Credentials
+Enter Credentials > Authenticate
+Authenticate > Invalid Credentials: Failed
+Invalid Credentials > Enter Credentials: Retry
+Authenticate > Check Role: Success
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - ROLE ROUTING
+// ════════════════════════════════════════════════════════════════
+
+Check Role > Super Admin Dashboard: super_admin
+Check Role > Admin Dashboard: admin
+Check Role > Staff Dashboard: staff
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - SUPPLY CHAIN (PROCUREMENT)
+// ════════════════════════════════════════════════════════════════
+
+Super Admin Dashboard > Manage Suppliers: Partners
+Super Admin Dashboard > Create Procurement: Procurement
+Admin Dashboard > Manage Suppliers: Partners
+Admin Dashboard > Create Procurement: Procurement
+
+Create Procurement > Select Supplier
+Select Supplier > Select Variety
+Select Variety > Enter Quantity and Price
+Enter Quantity and Price > Calculate Total Cost
+Calculate Total Cost > Assign to Batch
+Assign to Batch > Create Batch: New Batch
+Assign to Batch > Save Procurement: No Batch
+Create Batch > Save Procurement
+Save Procurement > Log Audit Trail
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - DRYING PROCESS
+// ════════════════════════════════════════════════════════════════
+
+Save Procurement > Select Source: Send to Drying
+Select Source > Single Procurement Source: Single
+Select Source > Batch Source: Batch
+Single Procurement Source > Create Drying Process
+Batch Source > Create Drying Process
+Create Drying Process > Drying In Progress
+Drying In Progress > Increment Day: Each Day
+Increment Day > Drying In Progress
+Drying In Progress > Drying Complete: Check
+Drying Complete > Drying In Progress: Not Done
+Drying Complete > Mark as Dried: Done
+Mark as Dried > Update Procurement Status
+Mark as Dried > Log Audit Trail
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - PROCESSING / MILLING
+// ════════════════════════════════════════════════════════════════
+
+Update Procurement Status > Select Dried Sources: Mill Rice
+Select Dried Sources > Create Processing
+Create Processing > Start Milling
+Start Milling > Milling In Progress
+Milling In Progress > Enter Output KG: Milling Done
+Enter Output KG > Calculate Yield
+Calculate Yield > Complete Processing
+Complete Processing > Log Audit Trail
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - STOCK DISTRIBUTION
+// ════════════════════════════════════════════════════════════════
+
+Complete Processing > Select Product: Distribute Stock
+Select Product > Select Processing Sources
+Select Processing Sources > Enter KG to Distribute
+Enter KG to Distribute > Calculate Units
+Calculate Units > Trace Costs
+Trace Costs > Update Product Stock
+Update Product Stock > Create Stock Log
+Create Stock Log > Log Audit Trail
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - SALES (POS & ORDERS)
+// ════════════════════════════════════════════════════════════════
+
+Super Admin Dashboard > Sale Type: Sales
+Admin Dashboard > Sale Type: Sales
+Staff Dashboard > Sale Type: POS Only
+
+Sale Type > POS Walk-In: Walk-In
+Sale Type > Online Order: Order
+
+// POS Flow
+POS Walk-In > Add Products to Cart
+Add Products to Cart > Select Customer
+Select Customer > Create Inline Customer: New
+Select Customer > Existing Customer: Existing
+Create Inline Customer > Select Payment Method
+Existing Customer > Select Payment Method
+Select Payment Method > Cash Payment: Cash
+Select Payment Method > GCash Payment: GCash
+Cash Payment > Enter Amount Tendered
+GCash Payment > Enter Amount Tendered
+Enter Amount Tendered > Calculate Change
+Calculate Change > Complete POS Sale
+Complete POS Sale > Deduct Stock Immediately
+Complete POS Sale > Generate Transaction ID
+Generate Transaction ID > Log Audit Trail
+
+// Order Flow
+Online Order > Create Order
+Create Order > Order Pending
+Order Pending > Process Order: Accept
+Order Pending > Cancel Order: Cancel
+Process Order > Deduct Stock
+Deduct Stock > Ship Order
+Ship Order > Assign Driver: Yes
+Assign Driver > Calculate ETA
+Calculate ETA > Order Shipped
+Order Shipped > Order Delivered: Delivered
+Order Shipped > Cancel Order: Cancel
+Order Delivered > End: Complete
+
+// Cancel and Restore
+Cancel Order > Restore Stock
+Restore Stock > Log Audit Trail
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - RETURN FLOW
+// ════════════════════════════════════════════════════════════════
+
+Order Delivered > Request Return: Return
+Request Return > Upload Return Proof
+Upload Return Proof > Review Return
+Review Return > Accept Return: Approved
+Review Return > Reject Return: Rejected
+Reject Return > Revert to Delivered
+Accept Return > Assign Pickup Driver
+Assign Pickup Driver > Pickup Complete
+Pickup Complete > Mark Returned
+Mark Returned > Restock Items
+Restock Items > Log Audit Trail
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - VOID SALE
+// ════════════════════════════════════════════════════════════════
+
+Complete POS Sale > Void Sale: Void
+Order Delivered > Void Sale: Void
+Void Sale > Is Super Admin
+Is Super Admin > Execute Void: Yes
+Is Super Admin > Enter SA Password: No
+Enter SA Password > Verify Password
+Verify Password > Execute Void: Valid
+Verify Password > End: Invalid
+Execute Void > Restore Voided Stock
+Restore Voided Stock > Log Audit Trail
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - ANALYTICS AND DASHBOARD
+// ════════════════════════════════════════════════════════════════
+
+Super Admin Dashboard > View Dashboard: Analytics
+Admin Dashboard > View Dashboard: Analytics
+View Dashboard > Revenue Charts
+View Dashboard > Processing Charts
+View Dashboard > Inventory Health
+View Dashboard > Sales Predictions
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - SUPER ADMIN EXCLUSIVE FEATURES
+// ════════════════════════════════════════════════════════════════
+
+Super Admin Dashboard > Audit Trail
+Super Admin Dashboard > Archives Management
+Super Admin Dashboard > Database Backup
+Super Admin Dashboard > Business Settings
+Super Admin Dashboard > Appearance Theme
+Super Admin Dashboard > Website CMS
+Super Admin Dashboard > Admin Account Mgmt
+
+// ════════════════════════════════════════════════════════════════
+// CONNECTIONS - AUDIT TRAIL (all actions logged)
+// ════════════════════════════════════════════════════════════════
+
+Log Audit Trail > Audit Trail: Stored
+
+
+=== END OF CODE ===
+
+
+================================================================================
+  NOTES ON ERASER.IO FLOWCHART SYNTAX
+================================================================================
+
+SYNTAX RULES USED:
+  Node [shape: oval]                → oval/terminal shape (start/end)
+  Node [shape: diamond]            → decision/condition shape
+  Node [shape: rectangle]          → process/action shape
+  Node [icon: name]                → feather icon
+  Node [color: red]                → node color
+  A > B                            → arrow from A to B
+  A > B: label                     → arrow with label text
+  // comment                       → comment line (ignored)
+
+FLOWCHART COVERS:
+  1. User Authentication & Role Routing
+  2. Supply Chain: Procurement → Drying → Processing → Stock Distribution
+  3. Sales: POS Walk-In & Online Orders
+  4. Order Status Flow: Pending → Processing → Shipped → Delivered
+  5. Return Flow: Request → Review → Pickup → Returned → Restock
+  6. Void Sale Flow with Super Admin Authorization
+  7. Analytics & Dashboard
+  8. Super Admin Exclusive Features
+  9. Audit Trail Logging (all actions)

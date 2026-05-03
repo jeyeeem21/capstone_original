@@ -1,0 +1,543 @@
+================================================================================
+      USE CASE DIAGRAM (TEXT-BASED)
+      KJP Rice Mill Management System
+      (kjpricemill.com)
+================================================================================
+
+
+================================================================================
+I. SYSTEM ACTORS
+================================================================================
+
+  Actor               | Description
+  --------------------+--------------------------------------------------------
+  Public Visitor       | Unauthenticated user browsing the public website
+  Client               | Registered customer using the e-commerce portal
+  Staff                | Employee with POS and limited operational access
+  Driver               | Delivery personnel managing assigned deliveries
+  Admin                | Operational manager handling supply chain & sales
+  Super Admin          | Full system administrator with all privileges
+
+
+================================================================================
+II. USE CASE DIAGRAM (TEXT REPRESENTATION)
+================================================================================
+
+
+                    +---------------------------------------------------+
+                    |        KJP Rice Mill Management System             |
+                    +---------------------------------------------------+
+                    |                                                   |
+   +--------+      |  +---------------------------------------------+  |
+   | Public  |-------->| UC-01: Browse Product Catalog               |  |
+   | Visitor |-------->| UC-02: View About Page                      |  |
+   |         |-------->| UC-03: View Contact Page                    |  |
+   |         |-------->| UC-04: Register Account                     |  |
+   +--------+      |  +---------------------------------------------+  |
+                    |                                                   |
+   +--------+      |  +---------------------------------------------+  |
+   |        |-------->| UC-05: Log In / Log Out                      |  |
+   |        |-------->| UC-06: Reset Password                        |  |
+   |        |-------->| UC-07: Manage Profile                        |  |
+   |        |-------->| UC-08: Browse & Search Products              |  |
+   | Client |-------->| UC-09: Filter Products by Variety            |  |
+   |        |-------->| UC-10: Manage Shopping Cart                  |  |
+   |        |-------->| UC-11: Place Order                           |  |
+   |        |-------->| UC-12: Track Order Status                    |  |
+   |        |-------->| UC-13: View Order History                    |  |
+   |        |-------->| UC-14: Request Order Return                  |  |
+   +--------+      |  +---------------------------------------------+  |
+                    |                                                   |
+   +--------+      |  +---------------------------------------------+  |
+   |        |-------->| UC-05: Log In / Log Out                      |  |
+   |        |-------->| UC-07: Manage Profile                        |  |
+   | Staff  |-------->| UC-15: Access POS (Point of Sale)            |  |
+   |        |-------->| UC-16: Create Walk-in Sale                   |  |
+   |        |-------->| UC-17: View Products (Read-Only)             |  |
+   |        |-------->| UC-18: View Dashboard (Limited)              |  |
+   +--------+      |  +---------------------------------------------+  |
+                    |                                                   |
+   +--------+      |  +---------------------------------------------+  |
+   |        |-------->| UC-05: Log In / Log Out                      |  |
+   |        |-------->| UC-07: Manage Profile                        |  |
+   | Driver |-------->| UC-19: View Assigned Deliveries              |  |
+   |        |-------->| UC-20: Start Delivery                        |  |
+   |        |-------->| UC-21: Complete Delivery                     |  |
+   |        |-------->| UC-22: Report Delivery Failure               |  |
+   |        |-------->| UC-23: Add Delivery Notes                    |  |
+   +--------+      |  +---------------------------------------------+  |
+                    |                                                   |
+   +--------+      |  +---------------------------------------------+  |
+   |        |-------->| UC-05: Log In / Log Out                      |  |
+   |        |-------->| UC-07: Manage Profile                        |  |
+   |        |-------->| UC-24: View Admin Dashboard                  |  |
+   |        |-------->| UC-25: Manage Suppliers                      |  |
+   |        |-------->| UC-26: Manage Procurements                   |  |
+   |        |-------->| UC-27: Manage Procurement Batches            |  |
+   | Admin  |-------->| UC-28: Manage Drying Process                 |  |
+   |        |-------->| UC-29: Manage Processing (Milling)           |  |
+   |        |-------->| UC-30: Manage Products & Varieties           |  |
+   |        |-------->| UC-31: Manage Inventory                      |  |
+   |        |-------->| UC-32: Access POS (Point of Sale)            |  |
+   |        |-------->| UC-33: Manage Orders & Sales                 |  |
+   |        |-------->| UC-34: Manage Customers                      |  |
+   |        |-------->| UC-35: Manage Staff & Drivers                |  |
+   |        |-------->| UC-36: Approve/Reject Return Requests        |  |
+   |        |-------->| UC-37: View Sales Predictions                |  |
+   +--------+      |  +---------------------------------------------+  |
+                    |                                                   |
+   +--------+      |  +---------------------------------------------+  |
+   |        |-------->| (All Admin Use Cases: UC-24 to UC-37)        |  |
+   |        |-------->| UC-38: Manage Admin Accounts                 |  |
+   |        |-------->| UC-39: Void / Reverse Sales                  |  |
+   | Super  |-------->| UC-40: View Audit Trail Logs                 |  |
+   | Admin  |-------->| UC-41: Manage Business Settings              |  |
+   |        |-------->| UC-42: Manage Appearance Settings            |  |
+   |        |-------->| UC-43: Manage Website Content (CMS)          |  |
+   |        |-------->| UC-44: Archive & Restore Records             |  |
+   |        |-------->| UC-45: Database Backup & Export               |  |
+   |        |-------->| UC-46: Refresh Sales Predictions (ML)        |  |
+   +--------+      |  +---------------------------------------------+  |
+                    |                                                   |
+                    +---------------------------------------------------+
+
+
+================================================================================
+III. USE CASE DESCRIPTIONS
+================================================================================
+
+
+A. PUBLIC / AUTHENTICATION USE CASES
+--------------------------------------------------------------------------------
+
+  UC-01: Browse Product Catalog
+    Actor(s)       : Public Visitor, Client
+    Description    : User views the list of available rice products on the
+                     public-facing website without needing to log in.
+    Precondition   : None
+    Postcondition  : Product catalog is displayed with prices and details.
+
+  UC-02: View About Page
+    Actor(s)       : Public Visitor, Client
+    Description    : User views the About page with information about
+                     KJP Rice Mill (history, mission, etc.).
+    Precondition   : None
+    Postcondition  : About page content is displayed.
+
+  UC-03: View Contact Page
+    Actor(s)       : Public Visitor, Client
+    Description    : User views the Contact page with business address,
+                     phone number, email, and operating hours.
+    Precondition   : None
+    Postcondition  : Contact information is displayed.
+
+  UC-04: Register Account
+    Actor(s)       : Public Visitor
+    Description    : A new user registers a client account by providing
+                     personal details and verifying their email address.
+    Precondition   : User does not have an existing account.
+    Postcondition  : Client account is created; email verification is sent.
+
+  UC-05: Log In / Log Out
+    Actor(s)       : Client, Staff, Driver, Admin, Super Admin
+    Description    : User authenticates using email and password to access
+                     their role-specific dashboard. User can log out to
+                     end the session and invalidate the API token.
+    Precondition   : User has a verified and active account.
+    Postcondition  : User is redirected to their role-based dashboard.
+
+  UC-06: Reset Password
+    Actor(s)       : Client, Staff, Driver, Admin, Super Admin
+    Description    : User requests a password reset link via email and
+                     sets a new password.
+    Precondition   : User has a registered account.
+    Postcondition  : Password is updated; user can log in with new password.
+
+  UC-07: Manage Profile
+    Actor(s)       : Client, Staff, Driver, Admin, Super Admin
+    Description    : User views and updates their profile information
+                     (name, email, phone, password, theme preferences).
+    Precondition   : User is authenticated.
+    Postcondition  : Profile changes are saved.
+
+
+B. CLIENT (E-COMMERCE) USE CASES
+--------------------------------------------------------------------------------
+
+  UC-08: Browse & Search Products
+    Actor(s)       : Client
+    Description    : Client searches for rice products by name or keyword
+                     within the e-commerce shop.
+    Precondition   : User is logged in as Client.
+    Postcondition  : Matching products are displayed.
+
+  UC-09: Filter Products by Variety
+    Actor(s)       : Client
+    Description    : Client filters the product listing by rice variety
+                     (e.g., Dinorado, Sinandomeng).
+    Precondition   : User is logged in as Client.
+    Postcondition  : Filtered product list is displayed.
+
+  UC-10: Manage Shopping Cart
+    Actor(s)       : Client
+    Description    : Client adds products to cart, updates quantities,
+                     removes items, and views the price breakdown
+                     (subtotal, discount, delivery fee, total).
+    Precondition   : User is logged in as Client.
+    Postcondition  : Cart is updated with selected items.
+
+  UC-11: Place Order
+    Actor(s)       : Client
+    Description    : Client confirms the cart and places an order by
+                     selecting a payment method (Cash, GCash, COD)
+                     and providing delivery details.
+    Precondition   : Cart has at least one item; user is authenticated.
+    Postcondition  : Order is created with "Pending" status; stock is
+                     reserved; confirmation is shown.
+
+  UC-12: Track Order Status
+    Actor(s)       : Client
+    Description    : Client views the real-time status of their placed
+                     orders (Pending, Confirmed, Out for Delivery,
+                     Delivered, Completed).
+    Precondition   : Client has at least one active order.
+    Postcondition  : Current order status and details are displayed.
+
+  UC-13: View Order History
+    Actor(s)       : Client
+    Description    : Client views the complete history of all past orders
+                     including dates, items, amounts, and statuses.
+    Precondition   : User is logged in as Client.
+    Postcondition  : Order history list is displayed.
+
+  UC-14: Request Order Return
+    Actor(s)       : Client
+    Description    : Client submits a return request for a completed order,
+                     specifying reason and items to return.
+    Precondition   : Order status is "Completed" or "Delivered."
+    Postcondition  : Return request is submitted for Admin review.
+
+
+C. STAFF USE CASES
+--------------------------------------------------------------------------------
+
+  UC-15: Access POS (Point of Sale)
+    Actor(s)       : Staff, Admin, Super Admin
+    Description    : Staff accesses the Point of Sale interface to process
+                     walk-in customer transactions.
+    Precondition   : User is authenticated with Staff role or higher.
+    Postcondition  : POS interface is loaded.
+
+  UC-16: Create Walk-in Sale
+    Actor(s)       : Staff, Admin, Super Admin
+    Description    : Staff creates a new sale by selecting products,
+                     setting quantities, applying discounts/promo codes,
+                     and processing payment (Cash, GCash, Check).
+    Precondition   : POS is accessed; products are in stock.
+    Postcondition  : Sale is recorded; stock is deducted; receipt
+                     reference number is generated.
+
+  UC-17: View Products (Read-Only)
+    Actor(s)       : Staff
+    Description    : Staff views the product catalog with current stock
+                     levels and prices (no edit access).
+    Precondition   : User is authenticated as Staff.
+    Postcondition  : Product list is displayed (read-only).
+
+  UC-18: View Dashboard (Limited)
+    Actor(s)       : Staff
+    Description    : Staff views a simplified dashboard with basic KPIs
+                     relevant to daily operations.
+    Precondition   : User is authenticated as Staff.
+    Postcondition  : Dashboard is displayed.
+
+
+D. DRIVER USE CASES
+--------------------------------------------------------------------------------
+
+  UC-19: View Assigned Deliveries
+    Actor(s)       : Driver
+    Description    : Driver views the list of deliveries assigned to them
+                     with customer info, address, and order details.
+    Precondition   : User is authenticated as Driver.
+    Postcondition  : Delivery list is displayed.
+
+  UC-20: Start Delivery
+    Actor(s)       : Driver
+    Description    : Driver marks a delivery as "In Transit" to indicate
+                     the order is on its way to the customer.
+    Precondition   : Delivery is in "Assigned" status.
+    Postcondition  : Delivery status is updated to "In Transit."
+
+  UC-21: Complete Delivery
+    Actor(s)       : Driver
+    Description    : Driver marks a delivery as "Completed" upon
+                     successful handover to the customer.
+    Precondition   : Delivery is in "In Transit" status.
+    Postcondition  : Delivery status is updated to "Completed";
+                     order status is updated accordingly.
+
+  UC-22: Report Delivery Failure
+    Actor(s)       : Driver
+    Description    : Driver reports a failed delivery attempt with a
+                     reason (e.g., customer not available, wrong address).
+    Precondition   : Delivery is in "In Transit" status.
+    Postcondition  : Delivery is marked as "Failed"; Admin is notified.
+
+  UC-23: Add Delivery Notes
+    Actor(s)       : Driver
+    Description    : Driver adds notes or remarks to a delivery record
+                     for reference (e.g., special instructions, issues).
+    Precondition   : Delivery is assigned to the driver.
+    Postcondition  : Notes are saved to the delivery record.
+
+
+E. ADMIN USE CASES
+--------------------------------------------------------------------------------
+
+  UC-24: View Admin Dashboard
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin views the comprehensive dashboard with KPIs
+                     including revenue trends, order stats, inventory
+                     health, payment distribution, and recent activity.
+    Precondition   : User is authenticated as Admin or Super Admin.
+    Postcondition  : Dashboard with charts and metrics is displayed.
+
+  UC-25: Manage Suppliers
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin creates, views, updates, and archives supplier
+                     records (name, contact, address, status).
+    Precondition   : User is authenticated as Admin or Super Admin.
+    Postcondition  : Supplier records are updated in the database.
+
+  UC-26: Manage Procurements
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin records new raw palay purchases from suppliers,
+                     specifying quantity (kg/sacks), price per kg, variety,
+                     and total cost. Inline supplier creation supported.
+    Precondition   : At least one supplier exists or is created inline.
+    Postcondition  : Procurement record is created; cost is logged.
+
+  UC-27: Manage Procurement Batches
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin groups procurements into batches by variety
+                     or season for organized drying and processing.
+    Precondition   : Procurements exist in the system.
+    Postcondition  : Batch is created with assigned procurements.
+
+  UC-28: Manage Drying Process
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin records and tracks the drying of procured
+                     palay, including drying days, cost per sack,
+                     individual or batch drying mode, day increments,
+                     and postponements.
+    Precondition   : Procurement exists with "Pending" or "Drying" status.
+    Postcondition  : Drying record is created/updated; costs are tracked.
+
+  UC-29: Manage Processing (Milling)
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin records the milling process, specifying input
+                     (dried rice in kg) from one or more drying sources,
+                     and recording output (milled rice in kg). System
+                     auto-computes yield percentage and husk waste.
+    Precondition   : Dried rice is available from completed drying.
+    Postcondition  : Processing record is created; output is distributed
+                     to product inventory.
+
+  UC-30: Manage Products & Varieties
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin creates and manages rice product entries
+                     (name, variety, weight, price, status) and rice
+                     variety types (Dinorado, Sinandomeng, etc.).
+    Precondition   : User is authenticated as Admin or Super Admin.
+    Postcondition  : Product and variety records are updated.
+
+  UC-31: Manage Inventory
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin monitors stock levels per product, views stock
+                     logs of all inventory movements, sets low-stock
+                     thresholds, and reviews cost analysis per product.
+    Precondition   : Products exist with stock data.
+    Postcondition  : Inventory data and alerts are displayed.
+
+  UC-32: Access POS (Point of Sale)
+    Actor(s)       : Admin, Super Admin
+    Description    : (Same as UC-15 — Admin has full POS access.)
+
+  UC-33: Manage Orders & Sales
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin views, updates, and manages all customer orders
+                     and walk-in sales. Includes updating order status,
+                     processing payments, and assigning deliveries.
+    Precondition   : Orders/sales exist in the system.
+    Postcondition  : Order/sale records are updated.
+
+  UC-34: Manage Customers
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin views customer accounts, verifies contacts,
+                     links accounts, and reviews order histories.
+    Precondition   : Customer records exist.
+    Postcondition  : Customer data is updated.
+
+  UC-35: Manage Staff & Drivers
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin creates and manages staff and driver accounts
+                     (name, position, phone, date hired, status).
+                     Admin cannot create other Admin accounts.
+    Precondition   : User is authenticated as Admin or Super Admin.
+    Postcondition  : Staff/driver accounts are created or updated.
+
+  UC-36: Approve/Reject Return Requests
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin reviews client return requests and approves
+                     or rejects them. Approved returns restore stock.
+    Precondition   : Return request is submitted by a Client.
+    Postcondition  : Return is approved (stock restored) or rejected.
+
+  UC-37: View Sales Predictions
+    Actor(s)       : Admin, Super Admin
+    Description    : Admin views ML-generated sales forecasts and demand
+                     predictions based on historical data using
+                     regression models.
+    Precondition   : Sufficient historical sales data exists.
+    Postcondition  : Prediction charts and data are displayed.
+
+
+F. SUPER ADMIN EXCLUSIVE USE CASES
+--------------------------------------------------------------------------------
+
+  UC-38: Manage Admin Accounts
+    Actor(s)       : Super Admin
+    Description    : Super Admin creates, updates, and archives Admin
+                     user accounts. Only Super Admin can create Admins.
+    Precondition   : User is authenticated as Super Admin.
+    Postcondition  : Admin accounts are created or updated.
+
+  UC-39: Void / Reverse Sales
+    Actor(s)       : Super Admin
+    Description    : Super Admin voids or reverses completed sales
+                     transactions. Stock is restored upon voiding.
+    Precondition   : Sale exists with "Completed" status.
+    Postcondition  : Sale is voided; stock is restored; audit log
+                     records the action.
+
+  UC-40: View Audit Trail Logs
+    Actor(s)       : Super Admin
+    Description    : Super Admin views the complete audit trail of all
+                     system activities (user actions, timestamps,
+                     changes made) for compliance and monitoring.
+    Precondition   : User is authenticated as Super Admin.
+    Postcondition  : Audit trail logs are displayed with filters.
+
+  UC-41: Manage Business Settings
+    Actor(s)       : Super Admin
+    Description    : Super Admin configures business information including
+                     business name, logo, address, contact details,
+                     and operating hours.
+    Precondition   : User is authenticated as Super Admin.
+    Postcondition  : Business settings are updated system-wide.
+
+  UC-42: Manage Appearance Settings
+    Actor(s)       : Super Admin
+    Description    : Super Admin customizes the system's visual appearance
+                     including theme colors, dark/light mode defaults,
+                     and font settings.
+    Precondition   : User is authenticated as Super Admin.
+    Postcondition  : Appearance settings are applied system-wide.
+
+  UC-43: Manage Website Content (CMS)
+    Actor(s)       : Super Admin
+    Description    : Super Admin edits public website content including
+                     the home page hero section, features section,
+                     and About page through a built-in CMS.
+    Precondition   : User is authenticated as Super Admin.
+    Postcondition  : Website content is updated on the public site.
+
+  UC-44: Archive & Restore Records
+    Actor(s)       : Super Admin
+    Description    : Super Admin views archived (soft-deleted) records
+                     across all modules and can restore them back
+                     to active status.
+    Precondition   : Archived records exist in the system.
+    Postcondition  : Records are restored or permanently remain archived.
+
+  UC-45: Database Backup & Export
+    Actor(s)       : Super Admin
+    Description    : Super Admin initiates a full database backup and
+                     exports data for safekeeping or migration.
+    Precondition   : User is authenticated as Super Admin.
+    Postcondition  : Database backup file is generated and downloadable.
+
+  UC-46: Refresh Sales Predictions (ML)
+    Actor(s)       : Super Admin
+    Description    : Super Admin triggers a retraining of the ML models
+                     to refresh sales predictions with the latest data.
+    Precondition   : Historical sales data exists in the system.
+    Postcondition  : ML models are retrained; predictions are updated.
+
+
+================================================================================
+IV. USE CASE RELATIONSHIPS (INCLUDE & EXTEND)
+================================================================================
+
+  Relationship                                    | Type
+  ------------------------------------------------+-----------
+  UC-11 (Place Order) <<includes>> UC-10          | Include
+    (Manage Shopping Cart)                        |
+                                                  |
+  UC-16 (Create Walk-in Sale) <<includes>> UC-15  | Include
+    (Access POS)                                  |
+                                                  |
+  UC-11 (Place Order) <<extends>> UC-12           | Extend
+    (Track Order Status)                          |
+                                                  |
+  UC-21 (Complete Delivery) <<extends>> UC-33     | Extend
+    (Manage Orders & Sales)                       |
+                                                  |
+  UC-26 (Manage Procurements) <<extends>> UC-25   | Extend
+    (Manage Suppliers — inline supplier creation)  |
+                                                  |
+  UC-29 (Manage Processing) <<includes>> UC-28    | Include
+    (Manage Drying Process — requires dried input) |
+                                                  |
+  UC-29 (Manage Processing) <<extends>> UC-31     | Extend
+    (Manage Inventory — auto stock distribution)   |
+                                                  |
+  UC-36 (Approve Return) <<extends>> UC-31        | Extend
+    (Manage Inventory — stock restoration)         |
+                                                  |
+  UC-39 (Void Sales) <<extends>> UC-31            | Extend
+    (Manage Inventory — stock restoration)         |
+                                                  |
+  UC-46 (Refresh Predictions) <<includes>> UC-37  | Include
+    (View Sales Predictions)                      |
+
+
+================================================================================
+V. ACTOR GENERALIZATION (INHERITANCE)
+================================================================================
+
+  Super Admin inherits all use cases from Admin.
+  Admin inherits POS use cases from Staff.
+
+  Hierarchy:
+
+    Public Visitor
+        |
+        v
+    Client (registered Public Visitor)
+
+    Staff
+        |
+        v
+    Admin (inherits Staff use cases + more)
+        |
+        v
+    Super Admin (inherits all Admin use cases + exclusive ones)
+
+    Driver (independent role, no inheritance)
+
+
+================================================================================
+  END OF USE CASE DIAGRAM
+================================================================================

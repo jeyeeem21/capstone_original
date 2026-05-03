@@ -1,0 +1,1180 @@
+================================================================================
+              KJP RICEMILL - SYSTEM ARCHITECTURE DIAGRAM
+              Complete Flow & Structure Documentation
+              Generated: April 13, 2026
+================================================================================
+
+
+================================================================================
+1. HIGH-LEVEL SYSTEM ARCHITECTURE
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                         CLIENT LAYER (Browser)                         │
+    │                                                                        │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
+    │  │  React SPA   │  │  Tailwind    │  │  Vite Dev    │  │  Lazy     │  │
+    │  │  (Vite PWA)  │  │  CSS + Dark  │  │  Server /    │  │  Loading  │  │
+    │  │  React 18+   │  │  Mode Theme  │  │  HMR         │  │  per Role │  │
+    │  └──────┬───────┘  └──────────────┘  └──────────────┘  └───────────┘  │
+    │         │                                                              │
+    │  ┌──────▼──────────────────────────────────────────────────────────┐   │
+    │  │  Context Providers: AuthContext, ThemeContext, BusinessContext  │   │
+    │  └──────┬─────────────────────────────────────────────────────────┘   │
+    │         │ Axios HTTP (REST API)                                        │
+    └─────────┼──────────────────────────────────────────────────────────────┘
+              │
+    ┌─────────▼──────────────────────────────────────────────────────────────┐
+    │                         API LAYER (Laravel)                            │
+    │                                                                        │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
+    │  │  Laravel 11   │  │  Sanctum     │  │  Fortify     │  │  Inertia  │  │
+    │  │  PHP 8.2+     │  │  Token Auth  │  │  2FA Ready   │  │  SSR      │  │
+    │  └──────┬───────┘  └──────────────┘  └──────────────┘  └───────────┘  │
+    │         │                                                              │
+    │  ┌──────▼──────────────────────────────────────────────────────────┐   │
+    │  │  Middleware: auth:sanctum → role:super_admin|admin|staff       │   │
+    │  │  + EnsureUserHasRole + HandleAppearance + Throttle             │   │
+    │  └──────┬─────────────────────────────────────────────────────────┘   │
+    │         │                                                              │
+    │  ┌──────▼──────────────────────────────────────────────────────────┐   │
+    │  │  Controllers → Services → Models → Eloquent ORM                │   │
+    │  └──────┬─────────────────────────────────────────────────────────┘   │
+    └─────────┼──────────────────────────────────────────────────────────────┘
+              │
+    ┌─────────▼──────────────────────────────────────────────────────────────┐
+    │                         DATA LAYER                                     │
+    │                                                                        │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                 │
+    │  │  MySQL /      │  │  File        │  │  Mail        │                 │
+    │  │  MariaDB      │  │  Storage     │  │  (SMTP)      │                 │
+    │  │  Database     │  │  (images,    │  │  Notifications│                │
+    │  │              │  │  proofs,     │  │              │                 │
+    │  │              │  │  backups)    │  │              │                 │
+    │  └──────────────┘  └──────────────┘  └──────────────┘                 │
+    └────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+2. USER ROLES & HIERARCHY
+================================================================================
+
+    ┌─────────────────────────────────────────────────────┐
+    │                  SUPER ADMIN                        │
+    │   (Seeded only - cannot be created via UI)          │
+    │   Full system control + exclusive features          │
+    │   + 2FA (Two-Factor Authentication) [PLANNED]       │
+    ├─────────────────────────────────────────────────────┤
+    │                                                     │
+    │   ▼ Can create/manage                               │
+    │                                                     │
+    │   ┌─────────────────────────────────────────┐       │
+    │   │              ADMIN                      │       │
+    │   │   Created by Super Admin only           │       │
+    │   │   Operational management access         │       │
+    │   │   + 2FA (Two-Factor Authentication)     │       │
+    │   │     [PLANNED]                           │       │
+    │   ├─────────────────────────────────────────┤       │
+    │   │                                         │       │
+    │   │   ▼ Can create/manage                   │       │
+    │   │                                         │       │
+    │   │   ┌─────────────────────────────┐       │       │
+    │   │   │    STAFF (Secretary)        │       │       │
+    │   │   │    POS & basic operations   │       │       │
+    │   │   └─────────────────────────────┘       │       │
+    │   │                                         │       │
+    │   │   ┌─────────────────────────────┐       │       │
+    │   │   │    STAFF (Driver)           │       │       │
+    │   │   │    Delivery portal only     │       │       │
+    │   │   └─────────────────────────────┘       │       │
+    │   │                                         │       │
+    │   └─────────────────────────────────────────┘       │
+    │                                                     │
+    └─────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────┐
+    │              CUSTOMER                               │
+    │   Self-registration (public)                        │
+    │   Can link to User account for login                │
+    │   Shopping, orders, profile management              │
+    └─────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────┐
+    │              PUBLIC VISITOR                          │
+    │   No authentication required                        │
+    │   Browse products, about, contact only              │
+    └─────────────────────────────────────────────────────┘
+
+
+================================================================================
+3. AUTHENTICATION & AUTHORIZATION FLOW
+================================================================================
+
+    ┌──────────┐
+    │  User    │
+    │  Opens   │
+    │  Website │
+    └────┬─────┘
+         │
+         ▼
+    ┌──────────────────┐     ┌───────────────────────────────────┐
+    │  Landing Page    │────►│  PUBLIC ACCESS (No Auth)          │
+    │  (Home /)        │     │  - / (Home)                       │
+    │                  │     │  - /about                         │
+    │  [Login Button]  │     │  - /products (catalog)            │
+    │  [Register]      │     │  - /contact                       │
+    └───────┬──────────┘     └───────────────────────────────────┘
+            │
+            ▼ Clicks Login
+    ┌───────────────────────────────────────────────────────────┐
+    │  LOGIN MODAL (appears on home page)                       │
+    │  - Email + Password                                       │
+    │  - Forgot Password link                                   │
+    │  - Register link (for customers)                          │
+    │  - Staff Verification link                                │
+    └───────────────────┬───────────────────────────────────────┘
+                        │
+                        ▼
+    ┌───────────────────────────────────────────────────────────┐
+    │  POST /api/auth/login                                     │
+    │  - Validates credentials                                  │
+    │  - Checks email verified                                  │
+    │  - Checks status = active                                 │
+    │  - Rate limited (throttle)                                │
+    │  - Creates Sanctum token                                  │
+    │  - Logs audit trail                                       │
+    │                                                           │
+    │  [PLANNED] 2FA CHECK (Super Admin & Admin only):          │
+    │  ┌─────────────────────────────────────────────────┐      │
+    │  │  If 2FA enabled:                                │      │
+    │  │  → Show 2FA code entry screen                   │      │
+    │  │  → Validate TOTP code or recovery code          │      │
+    │  │  → On success → issue token                     │      │
+    │  │  → On failure → deny access                     │      │
+    │  │                                                 │      │
+    │  │  2FA Setup (Settings → Two-Factor):             │      │
+    │  │  → Enable 2FA → show QR code (TOTP secret)     │      │
+    │  │  → Scan with authenticator app                  │      │
+    │  │  → Confirm with code                            │      │
+    │  │  → Save recovery codes                          │      │
+    │  │  → Disable 2FA (with password confirmation)     │      │
+    │  └─────────────────────────────────────────────────┘      │
+    └───────────────────┬───────────────────────────────────────┘
+                        │
+                        ▼
+    ┌───────────────────────────────────────────────────────────┐
+    │  ROLE-BASED REDIRECT                                      │
+    │                                                           │
+    │  super_admin  → /superadmin/dashboard                     │
+    │  admin        → /admin/dashboard                          │
+    │  staff + Secretary position → /secretary/pos              │
+    │  staff + Driver position    → /driver/dashboard           │
+    │  customer     → /customer/dashboard                       │
+    └───────────────────────────────────────────────────────────┘
+
+
+    CUSTOMER REGISTRATION FLOW:
+    ┌──────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────────┐
+    │ Click    │───►│ Check Email  │───►│ Send Verify   │───►│ Enter Code   │
+    │ Register │    │ (unique?)    │    │ Code (email)  │    │ from Email   │
+    └──────────┘    └──────────────┘    └───────────────┘    └──────┬───────┘
+                                                                    │
+                                                                    ▼
+                                                            ┌──────────────┐
+                                                            │ Complete     │
+                                                            │ Registration │
+                                                            │ (name, pass) │
+                                                            └──────────────┘
+
+    STAFF ACCOUNT CREATION FLOW (by Admin/Super Admin):
+    ┌──────────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────────┐
+    │ Admin creates │───►│ System sends │───►│ Staff clicks  │───►│ Staff sets   │
+    │ staff account │    │ verify email │    │ verify link   │    │ password &   │
+    │ (name, email, │    │ with code    │    │ in email      │    │ verifies     │
+    │  role, pos)   │    │              │    │               │    │ account      │
+    └──────────────┘    └──────────────┘    └───────────────┘    └──────────────┘
+
+    SESSION MANAGEMENT:
+    - Single active session per account
+    - If user logs in on Device B, Device A gets kicked out
+    - Session overlay notification shown to kicked-out device
+    - session_token tracked in users table
+
+
+================================================================================
+4. 2FA (TWO-FACTOR AUTHENTICATION) FLOW [PLANNED]
+================================================================================
+
+    APPLIES TO: Super Admin, Admin
+
+    SETUP FLOW:
+    ┌───────────────┐    ┌─────────────────┐    ┌─────────────────┐
+    │ Go to Settings│───►│ Click "Enable   │───►│ System generates│
+    │ → Two-Factor  │    │ Two-Factor Auth"│    │ TOTP secret key │
+    └───────────────┘    └─────────────────┘    └───────┬─────────┘
+                                                        │
+                                                        ▼
+    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+    │ Recovery codes  │◄───│ Enter code from │◄───│ Display QR Code │
+    │ displayed       │    │ authenticator   │    │ (scan with      │
+    │ (save securely) │    │ app to confirm  │    │ Google Auth,    │
+    │                 │    │                 │    │ Authy, etc.)    │
+    └─────────────────┘    └─────────────────┘    └─────────────────┘
+
+    LOGIN WITH 2FA:
+    ┌──────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────────┐
+    │ Enter    │───►│ Credentials  │───►│ 2FA Challenge │───►│ Enter 6-digit│
+    │ email &  │    │ validated    │    │ Screen shown  │    │ TOTP code or │
+    │ password │    │ (correct)    │    │               │    │ recovery code│
+    └──────────┘    └──────────────┘    └───────────────┘    └──────┬───────┘
+                                                                    │
+                                            ┌───────────────────────┤
+                                            │                       │
+                                            ▼                       ▼
+                                     ┌──────────────┐       ┌──────────────┐
+                                     │ Code Valid   │       │ Code Invalid │
+                                     │ → Issue token│       │ → Deny login │
+                                     │ → Redirect   │       │ → Try again  │
+                                     └──────────────┘       └──────────────┘
+
+    DISABLE 2FA:
+    ┌───────────────┐    ┌─────────────────┐    ┌─────────────────┐
+    │ Go to Settings│───►│ Click "Disable  │───►│ Confirm with    │
+    │ → Two-Factor  │    │ Two-Factor Auth"│    │ current password│
+    └───────────────┘    └─────────────────┘    └───────┬─────────┘
+                                                        │
+                                                        ▼
+                                                ┌─────────────────┐
+                                                │ 2FA removed     │
+                                                │ two_factor_     │
+                                                │ secret = null   │
+                                                └─────────────────┘
+
+    LARAVEL FORTIFY COLUMNS (already in users table):
+    - two_factor_secret       (encrypted TOTP secret)
+    - two_factor_recovery_codes (encrypted JSON array)
+    - two_factor_confirmed_at (timestamp, null if not confirmed)
+
+    SETTINGS ROUTE (already exists):
+    - GET/PUT /settings/two-factor (auth + verified middleware)
+    - Controller: TwoFactorAuthenticationController
+
+
+================================================================================
+5. FRONTEND PAGE MAP BY ROLE
+================================================================================
+
+    ═══════════════════════════════════════════════════════════════
+    PUBLIC PAGES (PublicLayout - No Authentication)
+    ═══════════════════════════════════════════════════════════════
+
+    /                  → Home (Landing Page)
+    │                    - Hero section (CMS-driven title, subtitle, CTA)
+    │                    - Featured products section
+    │                    - Business highlights & testimonials
+    │                    - Login/Register modals
+    │
+    /about             → About Page
+    │                    - Company story, mission/vision
+    │                    - Team information
+    │                    - Contact buttons
+    │
+    /products          → Product Catalog (Public)
+    │                    - Browse all available products
+    │                    - Search & filter by variety
+    │                    - View pricing & product details
+    │
+    /contact           → Contact Page
+    │                    - Contact form (name, email, subject, message)
+    │                    - Business location & map
+    │                    - Contact information
+    │
+    /staff/verify      → Staff Email Verification
+                         - Enter verification code from email
+                         - Set initial password
+
+
+    ═══════════════════════════════════════════════════════════════
+    SUPER ADMIN PAGES (MainLayout - Collapsible Sidebar)
+    Path prefix: /superadmin/*
+    ═══════════════════════════════════════════════════════════════
+
+    /superadmin/dashboard          → Dashboard
+    │                                - KPI metrics (revenue, orders, customers, products)
+    │                                - Sales charts (monthly/yearly with chart type toggle)
+    │                                - Order trends visualization
+    │                                - Profit analysis
+    │                                - Sales predictions toggle (ML regression)
+    │                                - Recent activity feed
+    │                                - Low stock alerts
+    │
+    /superadmin/procurement        → Procurement Management
+    │                                - List all procurements (table view)
+    │                                - Create/Edit/Archive procurement
+    │                                - Select supplier + variety + qty + price
+    │                                - Auto-calculate total cost
+    │                                - Assign to procurement batch
+    │                                - View procurement statistics
+    │
+    /superadmin/drying             → Drying Process Tracking
+    │                                - List all drying processes
+    │                                - Create from procurement or batch
+    │                                - Increment day (recalculates cost)
+    │                                - Mark as Dried
+    │                                - Postpone drying
+    │                                - View cost breakdown per drying
+    │                                - Delete (only if quantity_out = 0)
+    │
+    /superadmin/processing         → Processing/Milling Management
+    │                                - List all processings
+    │                                - Create from one or more dried processes
+    │                                - Start processing / Complete processing
+    │                                - Enter output_kg, auto-calc husk & yield
+    │                                - Multi-source drying support
+    │                                - Revert to processing (if stock_out = 0)
+    │                                - View cost tracing per processing
+    │
+    /superadmin/products           → Products List
+    │                                - CRUD products (name, variety, price, weight, image)
+    │                                - Toggle active/inactive status
+    │                                - View stock levels
+    │                                - Stock distribution from completed processing
+    │                                - Cost analysis per product
+    │                                - Archive products (if stock = 0)
+    │
+    /superadmin/products/varieties → Variety Management
+    │                                - CRUD varieties (name, description, color)
+    │                                - View associated products count
+    │                                - Archive varieties (if no products linked)
+    │
+    /superadmin/products/inventory → Inventory Management
+    │                                - Real-time stock levels per product
+    │                                - Stock logs history
+    │                                - Low stock alerts (below stock_floor)
+    │                                - Stock distribution records
+    │                                - Cost per unit & profit margin display
+    │
+    /superadmin/pos                → Point of Sale
+    │                                - Product search & add to cart
+    │                                - Select/create customer
+    │                                - Payment method (Cash/GCash)
+    │                                - Calculate change
+    │                                - Generate receipt (TXN-YYYYMMDD-NNN)
+    │                                - Stock deducted immediately on sale
+    │                                - Void without password ★ SUPER ADMIN ONLY
+    │
+    /superadmin/orders             → Order Management
+    │                                - List all orders (ORD-YYYYMMDD-NNN)
+    │                                - Create order for customer
+    │                                - Update order status:
+    │                                  Pending → Processing → Shipped → Delivered
+    │                                - Cancel/void orders (restores stock)
+    │                                - Process return requests
+    │                                  (Accept → Picking Up → Returned)
+    │                                  (Reject → back to Delivered)
+    │                                - Mark payment as received
+    │                                - Assign driver for delivery
+    │
+    /superadmin/sales              → Sales Analytics
+    │                                - Revenue reports & charts
+    │                                - Sales by product breakdown
+    │                                - Sales trends over time
+    │                                - Void transactions ★ SUPER ADMIN ONLY
+    │                                - Filter by date range, product, status
+    │
+    /superadmin/partners           → Partners Overview
+    │
+    /superadmin/partners/supplier  → Supplier Management
+    │                                - CRUD suppliers (name, contact, address)
+    │                                - View supplier procurement history
+    │                                - Archive/restore suppliers
+    │
+    /superadmin/partners/customer  → Customer Management
+    │                                - CRUD customers (name, contact, address)
+    │                                - View customer order history
+    │                                - Create user account for customer
+    │                                - Archive/restore customers
+    │
+    /superadmin/staff-management   → Staff & Employee Management
+    │                                - Create/Edit/Archive ALL roles:
+    │                                  Admin, Staff (Secretary), Staff (Driver)
+    │                                - Assign positions & truck plate numbers
+    │                                - Send email verification
+    │                                - View staff status & activity
+    │                                ★ Can manage Admin accounts (Super Admin only)
+    │
+    /superadmin/settings           → Settings (Multi-Tab)
+    │   │
+    │   ├── Profile Tab            → Own profile (name, email, avatar)
+    │   │
+    │   ├── General Tab ★          → Business Settings (Super Admin Only)
+    │   │                            - Business name, tagline, email, phone
+    │   │                            - Address & operating hours
+    │   │                            - Logo upload
+    │   │                            - Footer & social media links
+    │   │                            - Shipping rates & warehouse address
+    │   │                            - SMTP configuration (mail host, port,
+    │   │                              username, password, encryption)
+    │   │
+    │   ├── Appearance Tab ★       → Theme Settings (Super Admin Only)
+    │   │                            - Primary & border colors (color picker)
+    │   │                            - Button colors & styling
+    │   │                            - Font size slider
+    │   │                            - Dark/Light mode toggle
+    │   │                            - Layout options
+    │   │
+    │   ├── Information Tab ★      → Website CMS (Super Admin Only)
+    │   │                            - Home page hero (title, subtitle, CTA, image)
+    │   │                            - Home page features section
+    │   │                            - About page section management
+    │   │
+    │   ├── Data Tab ★             → Database Management (Super Admin Only)
+    │   │                            - Database info (tables, sizes, counts)
+    │   │                            - Export SQL backup (.sql download)
+    │   │                            - Export CSV backup (.zip download)
+    │   │                            - Import CSV data (select table + upload)
+    │   │
+    │   ├── Accounts Tab ★         → Admin Account Management (Super Admin Only)
+    │   │                            - View all admin accounts
+    │   │                            - Create new admin accounts
+    │   │                            - Edit/Archive admin accounts
+    │   │
+    │   └── Two-Factor Tab         → 2FA Configuration [PLANNED]
+    │                                - Enable/Disable 2FA
+    │                                - QR code display for TOTP setup
+    │                                - Recovery codes
+    │
+    ★ SUPER ADMIN EXCLUSIVE PAGES:
+    │
+    /superadmin/audit-trail        → Audit Trail (via Settings or separate route)
+    │                                ★ SUPER ADMIN ONLY
+    │                                - View all system activity logs
+    │                                - Filter by module, action, date
+    │                                - Today's activity count
+    │                                - Action breakdown (creates, updates, deletes)
+    │
+    /superadmin/archives           → Archives Management
+                                     ★ SUPER ADMIN ONLY
+                                     - View ALL soft-deleted records
+                                     - Filter by module tab
+                                     - Restore archived records
+                                     - View archived record details
+                                     - Statistics (total, by module, most recent)
+
+
+    ═══════════════════════════════════════════════════════════════
+    ADMIN PAGES (MainLayout - Collapsible Sidebar)
+    Path prefix: /admin/*
+    ═══════════════════════════════════════════════════════════════
+
+    Same pages as Super Admin EXCEPT:
+    
+    ✅ HAS ACCESS:
+    /admin/dashboard               → Dashboard (same as super admin)
+    /admin/procurement             → Procurement (create, edit - NO delete)
+    /admin/drying                  → Drying Process (full operational)
+    /admin/processing              → Processing (full operational)
+    /admin/products                → Products (add, edit - NO archive if stock > 0)
+    /admin/products/varieties      → Varieties (add, edit - NO archive if has products)
+    /admin/products/inventory      → Inventory (view, distribute stock)
+    /admin/pos                     → Point of Sale (full - void REQUIRES super admin password)
+    /admin/orders                  → Orders (manage, update, returns)
+    /admin/sales                   → Sales (view, create - NO void)
+    /admin/partners/supplier       → Suppliers (add, edit - archive if inactive)
+    /admin/partners/customer       → Customers (add, edit - archive if inactive)
+    /admin/staff-management        → Staff (manage Staff & Drivers ONLY - NOT Admins)
+    /admin/settings                → Settings (Profile tab ONLY + Two-Factor [PLANNED])
+
+    ❌ NO ACCESS (Hidden from sidebar/UI):
+    - Audit Trail
+    - Archives
+    - Settings > General (Business Settings)
+    - Settings > Appearance (Theme)
+    - Settings > Information (CMS)
+    - Settings > Data (Database Backup)
+    - Settings > Accounts (Admin Management)
+    - Void Sales (needs Super Admin password prompt)
+
+
+    ═══════════════════════════════════════════════════════════════
+    SECRETARY PAGES (StaffLayout - Horizontal Header Nav)
+    Path prefix: /secretary/*
+    Role: staff | Position: Secretary
+    ═══════════════════════════════════════════════════════════════
+
+    /secretary/dashboard           → Staff Dashboard
+    │                                - Daily sales summary
+    │                                - Pending orders count
+    │                                - Quick links to POS
+    │
+    /secretary/pos                 → Point of Sale (Primary Page)
+    │                                - Product search & add to cart
+    │                                - Customer selection/creation
+    │                                - Payment processing (Cash/GCash)
+    │                                - Receipt generation
+    │                                - Cannot void (needs admin)
+    │
+    /secretary/profile             → Staff Profile
+                                     - Update name, email, password
+                                     - Profile picture management
+
+    Navigation: Dashboard | Point of Sale | My Profile
+
+
+    ═══════════════════════════════════════════════════════════════
+    DRIVER PAGES (DriverLayout - Header + Mobile Bottom Nav)
+    Path prefix: /driver/*
+    Role: staff + Driver position OR driver role
+    ═══════════════════════════════════════════════════════════════
+
+    /driver/dashboard              → Driver Dashboard
+    │                                - Today's delivery count
+    │                                - Completed vs pending deliveries
+    │                                - Delivery summary stats
+    │
+    /driver/deliveries             → My Deliveries
+    │                                - Active delivery list
+    │                                - Delivery route (OpenRoute Service)
+    │                                - Update delivery status
+    │                                  (Pending → In Transit → Delivered / Failed)
+    │                                - Upload proof of delivery
+    │                                - Mark payment received (COD)
+    │
+    /driver/profile                → Driver Profile
+    │                                - Personal details
+    │                                - Vehicle info & plate number
+    │                                - License information
+    │
+    /driver/settings               → Driver Settings
+                                     - Notification preferences
+                                     - Availability status
+                                     - Account settings
+
+    Mobile Bottom Nav: Home | Deliveries | Profile | Settings
+
+
+    ═══════════════════════════════════════════════════════════════
+    CUSTOMER PAGES (CustomerLayout - Header + Mobile Bottom Nav)
+    Path prefix: /customer/*
+    Role: customer (or self-registered)
+    ═══════════════════════════════════════════════════════════════
+
+    /customer/dashboard            → Customer Dashboard
+    │                                - Order summary (total, pending, completed)
+    │                                - Recent orders list
+    │                                - Order timeline visualization
+    │                                - Order status breakdown chart
+    │
+    /customer/products             → Product Browsing & Shopping
+    │                                - Browse all active products
+    │                                - Search & filter by variety
+    │                                - View product details & pricing
+    │                                - Add to cart
+    │
+    /customer/cart                  → Shopping Cart
+    │                                - Review cart items
+    │                                - Edit quantities / remove items
+    │                                - Proceed to checkout
+    │                                - Payment method selection
+    │
+    /customer/orders               → Order History
+    │                                - All past & current orders
+    │                                - Order status tracking
+    │                                - Order details view
+    │                                - Request return
+    │                                - Reorder option
+    │
+    /customer/profile              → Customer Profile
+    │                                - Update personal info
+    │                                - Address management
+    │                                - Contact details
+    │
+    /customer/settings             → Customer Settings
+    │                                - Notification preferences
+    │                                - Account settings
+    │
+    /customer/pos                  → Point of Sale (customer access)
+
+    Mobile Bottom Nav: Dashboard | Products | Orders | Settings
+
+
+================================================================================
+6. BUSINESS PROCESS FLOW (Procurement → Sale)
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  STAGE 1: PROCUREMENT (Buy Raw Rice from Supplier)            │
+    │                                                                │
+    │  Input: Supplier + Variety + Quantity(kg) + Sacks + Price/kg   │
+    │  Formula: total_cost = quantity_kg × price_per_kg              │
+    │  Example: 5,000 kg × ₱10/kg = ₱50,000                        │
+    │  Status: Pending                                               │
+    │  Optional: Assign to Procurement Batch                         │
+    └──────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  STAGE 2: DRYING (Sun-dry or Machine-dry the Raw Rice)        │
+    │                                                                │
+    │  Create from: Individual procurement OR entire batch           │
+    │  Input: sacks, price_per_sack_per_day                          │
+    │  Daily: Admin clicks "Increment Day" → days += 1              │
+    │  Formula: drying_cost = sacks × price_per_sack × days          │
+    │  Example: 40 sacks × ₱50/sack × 3 days = ₱6,000              │
+    │  Status: Drying → Dried (click "Mark as Dried")               │
+    │  Can Postpone if needed                                        │
+    │  Delete only if quantity_out = 0                               │
+    └──────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  STAGE 3: PROCESSING / MILLING (Hull & Mill the Dried Rice)   │
+    │                                                                │
+    │  Select: one or more Dried drying processes as input sources   │
+    │  Input: total input_kg to mill                                 │
+    │  System: proportionally splits across selected drying sources  │
+    │  Status: Pending → Processing → Completed                      │
+    │  On Complete: enter output_kg, operator_name                   │
+    │  Auto-calc: husk_kg = input - output                           │
+    │             yield% = (output / input) × 100                    │
+    │  Example: 1,000 kg in → 600 kg out = 60% yield               │
+    │  Revert to Processing: only if stock_out = 0                  │
+    │  Delete: only if stock_out = 0                                │
+    └──────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  STAGE 4: STOCK DISTRIBUTION (Bag into Product Units)         │
+    │                                                                │
+    │  Select: completed processing(s) matching product's variety    │
+    │  Input: kg to take from each processing source                │
+    │  System calculates:                                            │
+    │    total_units = floor(total_kg / product_weight_per_unit)     │
+    │                                                                │
+    │  COST TRACING (Automated):                                     │
+    │    fraction = kg_taken / total_drying_kg                       │
+    │    procurement_cost_share = fraction × procurement_total       │
+    │    drying_cost_share = fraction × drying_total_price           │
+    │    total_production_cost = procurement + drying costs           │
+    │    cost_per_unit = total_cost / units                          │
+    │    profit_per_unit = selling_price - cost_per_unit             │
+    │    profit_margin% = (profit / price) × 100                    │
+    │                                                                │
+    │  Visual Indicators:                                             │
+    │    🟢 Green  = 20%+ margin (healthy)                           │
+    │    🟡 Amber  = 0-20% margin (warning)                          │
+    │    🔴 Red    = Negative margin (selling below cost!)            │
+    │                                                                │
+    │  Stock Logs created with full cost breakdown                   │
+    └──────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  STAGE 5: SALES (Sell via POS or Online Orders)               │
+    │                                                                │
+    │  A) POS (Walk-In):                                             │
+    │     - Add products to cart                                     │
+    │     - Select/create customer                                   │
+    │     - Payment: Cash or GCash                                   │
+    │     - Transaction ID: TXN-YYYYMMDD-NNN                        │
+    │     - Status: completed (stock deducted immediately)           │
+    │                                                                │
+    │  B) ORDERS (Online/Phone):                                     │
+    │     - Create order for customer                                │
+    │     - Payment: Cash/GCash/COD/Pay Later                        │
+    │     - Order ID: ORD-YYYYMMDD-NNN                              │
+    │     - Status: pending (stock deducted at processing)           │
+    │                                                                │
+    │  ORDER STATUS FLOW:                                            │
+    │  Pending → Processing → Shipped → Delivered                    │
+    │     │         │            │          │                         │
+    │     └─────────┴────────────┴──────────┴─→ Voided (restock)     │
+    │                                                                │
+    │  RETURN FLOW:                                                  │
+    │  Delivered → Return Requested → Picking Up → Returned(restock) │
+    │                    │                                            │
+    │                    └──→ Rejected (back to Delivered)            │
+    └────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+7. DELIVERY / DRIVER WORKFLOW
+================================================================================
+
+    ┌──────────────────┐
+    │ Admin creates    │
+    │ Delivery         │
+    │ Assignment       │
+    │ (driver, order,  │
+    │ destination)     │
+    └────────┬─────────┘
+             │
+             ▼
+    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+    │    PENDING       │───►│   IN TRANSIT     │───►│  DELIVERED       │
+    │                  │    │                  │    │                  │
+    │ Driver sees in   │    │ Driver clicks    │    │ Driver uploads   │
+    │ dashboard        │    │ "Start Delivery" │    │ proof of delivery│
+    │                  │    │ picked_up_at set │    │ delivered_at set │
+    └──────────────────┘    └──────────────────┘    └──────────────────┘
+                                                           │
+                                                    OR     ▼
+                                                    ┌──────────────────┐
+                                                    │    FAILED        │
+                                                    │                  │
+                                                    │ Driver marks     │
+                                                    │ delivery failed  │
+                                                    │ (reason logged)  │
+                                                    └──────────────────┘
+
+    Delivery Number Format: auto-generated
+    Priority Levels: Normal, High, Urgent
+    COD: Driver marks payment received → payment_status = paid
+
+
+================================================================================
+8. NOTIFICATION & EMAIL SYSTEM
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  IN-APP NOTIFICATIONS                                      │
+    │                                                             │
+    │  - NotificationBell component (header - all roles)          │
+    │  - Unread count badge                                       │
+    │  - Mark as read / Mark all as read                          │
+    │  - Types: order_update, low_stock, system, etc.             │
+    │  - Stored in notifications table per user                   │
+    │  - Toast messages for real-time alerts                      │
+    └─────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  EMAIL SYSTEM (SMTP - Configured via Super Admin Settings)  │
+    │                                                             │
+    │  Triggers:                                                  │
+    │  - Staff account creation → verification email              │
+    │  - Customer registration → verification code email          │
+    │  - Password reset → reset link email                        │
+    │  - Contact form → message to business email                 │
+    │  - Order status updates (infrastructure ready)              │
+    │  - Delivery notifications (infrastructure ready)            │
+    │                                                             │
+    │  SMTP Config (Super Admin Settings → General):              │
+    │  - Mail host, port, username, password                      │
+    │  - Encryption (TLS/SSL)                                     │
+    │  - From name & address                                      │
+    │  - Test email button                                        │
+    └─────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  AUDIT TRAIL (Super Admin Only)                             │
+    │                                                             │
+    │  - Logs all CREATE, READ, UPDATE, DELETE actions            │
+    │  - Records: user_id, action, model, record_id              │
+    │  - Tracks: changes (before/after), IP address, context      │
+    │  - Filterable by module, action type, date range            │
+    │  - Statistics: today's count, action breakdown              │
+    └─────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+9. SALES PREDICTION / ANALYTICS (ML REGRESSION)
+================================================================================
+
+    ┌──────────────────────────────────────────────────────────┐
+    │  Dashboard → Toggle "Show Predictions"                   │
+    │                                                          │
+    │  React Frontend                                          │
+    │  ┌──────────────────────────────────────────────┐        │
+    │  │  GET /api/predictions/sales?period=monthly   │        │
+    │  └──────────────────┬───────────────────────────┘        │
+    │                     │                                    │
+    │                     ▼                                    │
+    │  Laravel Backend                                         │
+    │  ┌──────────────────────────────────────────────┐        │
+    │  │  SalesPredictionService                      │        │
+    │  │  - Fetches historical sales data             │        │
+    │  │  - Extracts features:                        │        │
+    │  │    date, month, year, day_of_week,           │        │
+    │  │    is_weekend, rolling_averages              │        │
+    │  │  - Applies Linear Regression                 │        │
+    │  │  - Generates predictions with confidence     │        │
+    │  └──────────────────┬───────────────────────────┘        │
+    │                     │                                    │
+    │                     ▼                                    │
+    │  Response:                                               │
+    │  {                                                       │
+    │    predictions: [                                        │
+    │      { month, revenue,                                   │
+    │        confidence_upper,                                 │
+    │        confidence_lower }                                │
+    │    ]                                                     │
+    │  }                                                       │
+    │                                                          │
+    │  Displayed as chart with confidence bands                │
+    └──────────────────────────────────────────────────────────┘
+
+
+================================================================================
+10. DATABASE SCHEMA (KEY TABLES & RELATIONSHIPS)
+================================================================================
+
+    ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+    │   users      │     │  customers   │     │  suppliers   │
+    │──────────────│     │──────────────│     │──────────────│
+    │ id           │     │ id           │     │ id           │
+    │ name         │◄──┐ │ name         │     │ name         │
+    │ email        │   │ │ email ──────►│     │ contact      │
+    │ password     │   │ │ contact      │     │ email        │
+    │ role         │   │ │ phone        │     │ phone        │
+    │ position     │   │ │ address      │     │ address      │
+    │ status       │   │ │ status       │     │ status       │
+    │ session_token│   │ │ orders       │     └──────┬───────┘
+    │ 2fa_secret   │   │ └──────┬───────┘            │
+    │ 2fa_recovery │   │        │                     │
+    │ deleted_at   │   │        │ hasMany              │ hasMany
+    └──────┬───────┘   │        ▼                     ▼
+           │           │ ┌──────────────┐     ┌──────────────┐
+           │ belongsTo │ │   sales      │     │ procurements │
+           │           │ │──────────────│     │──────────────│
+           │           │ │ id           │     │ id           │
+           │           │ │ transaction_id│    │ supplier_id  │
+           │           └─│ customer_id  │     │ variety_id   │
+           │             │ subtotal     │     │ batch_id     │
+           │             │ discount     │     │ quantity_kg  │
+           │             │ delivery_fee │     │ sacks        │
+           │             │ total        │     │ price_per_kg │
+           │             │ payment_method│    │ total_cost   │
+           │             │ payment_status│    │ status       │
+           │             │ status       │     │ deleted_at   │
+           │             │ voided_by    │     └──────┬───────┘
+           │             └──────┬───────┘            │
+           │                    │                     │
+           │                    │ hasMany              │ belongsTo (via batch)
+           │                    ▼                     ▼
+           │             ┌──────────────┐     ┌──────────────────┐
+           │             │  sale_items  │     │procurement_batches│
+           │             │──────────────│     │──────────────────│
+           │             │ id           │     │ id               │
+           │             │ sale_id      │     │ name             │
+           │             │ product_id   │     │ status           │
+           │             │ quantity     │     │ quantity         │
+           │             │ unit_price   │     │ cost             │
+           │             │ total_price  │     └──────────────────┘
+           │             └──────────────┘
+           │
+           │ hasMany
+           ▼
+    ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+    │ audit_trails │     │ notifications│     │  varieties   │
+    │──────────────│     │──────────────│     │──────────────│
+    │ id           │     │ id           │     │ id           │
+    │ user_id      │     │ user_id      │     │ name         │
+    │ action       │     │ type         │     │ description  │
+    │ model_name   │     │ title        │     │ color        │
+    │ record_id    │     │ message      │     │ status       │
+    │ changes      │     │ data         │     │ products_count│
+    │ ip_address   │     │ read_at      │     └──────┬───────┘
+    │ context      │     └──────────────┘            │ hasMany
+    └──────────────┘                                 ▼
+                                              ┌──────────────┐
+                                              │   products   │
+                                              │──────────────│
+                                              │ product_id   │
+                                              │ product_name │
+                                              │ variety_id   │
+                                              │ price        │
+                                              │ stocks       │
+                                              │ stock_floor  │
+                                              │ unit         │
+                                              │ weight       │
+                                              │ image        │
+                                              │ status       │
+                                              │ is_deleted   │
+                                              └──────────────┘
+
+
+    SUPPLY CHAIN TABLES:
+
+    procurements ──► drying_processes ──► processings ──► stock_logs ──► products
+         │                │                    │              │
+         │                │                    │              │
+         ▼                ▼                    ▼              ▼
+    ┌────────────┐  ┌────────────────┐  ┌─────────────┐ ┌──────────┐
+    │drying_batch│  │processing_     │  │ (output_kg  │ │(cost_per │
+    │_procurements│ │drying_sources  │  │  husk_kg    │ │ _unit    │
+    │(pivot)     │  │(pivot)         │  │  yield%)    │ │ profit)  │
+    │            │  │                │  │             │ │          │
+    │sacks_taken │  │quantity_kg     │  │             │ │          │
+    │quantity_kg │  │                │  │             │ │          │
+    └────────────┘  └────────────────┘  └─────────────┘ └──────────┘
+
+
+    OTHER TABLES:
+
+    ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+    │     drivers      │   │delivery_         │   │ delivery_items   │
+    │──────────────────│   │assignments       │   │──────────────────│
+    │ id               │   │──────────────────│   │ id               │
+    │ name             │   │ id               │   │ assignment_id    │
+    │ contact          │   │ delivery_number  │   │ sale_id          │
+    │ license_number   │   │ driver_id        │   │ product_id       │
+    │ vehicle_type     │   │ customer_id      │   │ quantity         │
+    │ plate_number     │   │ destination      │   └──────────────────┘
+    │ status           │   │ delivery_date    │
+    │ total_deliveries │   │ priority         │
+    │ deleted_at       │   │ status           │
+    └──────────────────┘   │ proof_of_delivery│
+                           │ picked_up_at     │
+                           │ delivered_at     │
+                           └──────────────────┘
+
+    ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+    │appearance_       │   │business_         │   │website_          │
+    │settings          │   │settings          │   │contents          │
+    │──────────────────│   │──────────────────│   │──────────────────│
+    │ id               │   │ id               │   │ id               │
+    │ key              │   │ key              │   │ page             │
+    │ value            │   │ value            │   │ key              │
+    │ (theme colors)   │   │ (business info)  │   │ content          │
+    └──────────────────┘   └──────────────────┘   └──────────────────┘
+
+    ┌──────────────────┐
+    │contact_messages  │
+    │──────────────────│
+    │ id               │
+    │ name             │
+    │ email            │
+    │ subject          │
+    │ message          │
+    └──────────────────┘
+
+
+================================================================================
+11. COMPLETE ROLE-BASED ACCESS MATRIX
+================================================================================
+
+    ┌─────────────────────────┬───────┬───────┬─────────┬──────────┬────────┬────────┐
+    │ Feature                 │ Super │ Admin │Secretary│ Driver   │Customer│ Public │
+    │                         │ Admin │       │ (Staff) │ (Staff)  │        │        │
+    ├─────────────────────────┼───────┼───────┼─────────┼──────────┼────────┼────────┤
+    │ Landing Page            │  ✅   │  ✅   │   ✅    │    ✅    │   ✅   │   ✅   │
+    │ About Page              │  ✅   │  ✅   │   ✅    │    ✅    │   ✅   │   ✅   │
+    │ Products (public)       │  ✅   │  ✅   │   ✅    │    ✅    │   ✅   │   ✅   │
+    │ Contact Page            │  ✅   │  ✅   │   ✅    │    ✅    │   ✅   │   ✅   │
+    ├─────────────────────────┼───────┼───────┼─────────┼──────────┼────────┼────────┤
+    │ Admin Dashboard         │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Procurement (CRUD)      │  ✅   │  ✅*  │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Drying Process          │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Processing/Milling      │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Products (CRUD)         │  ✅   │  ✅*  │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Varieties (CRUD)        │  ✅   │  ✅*  │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Inventory Management    │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Stock Distribution      │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Sales Analytics         │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Sales Predictions (ML)  │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Order Management        │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Supplier Management     │  ✅   │  ✅*  │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Customer Management     │  ✅   │  ✅*  │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Point of Sale           │  ✅   │  ✅   │   ✅    │    ❌    │   ✅   │   ❌   │
+    ├─────────────────────────┼───────┼───────┼─────────┼──────────┼────────┼────────┤
+    │ Staff Mgmt (all roles)  │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Staff Mgmt (staff/drv)  │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Void Sales (no pwd)     │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Void Sales (with pwd)   │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Audit Trail             │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Archives (view/restore) │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Business Settings       │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Theme/Appearance        │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Website CMS             │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Database Backup/Export  │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ Admin Account Mgmt     │  ✅   │  ❌   │   ❌    │    ❌    │   ❌   │   ❌   │
+    │ 2FA Setup [PLANNED]     │  ✅   │  ✅   │   ❌    │    ❌    │   ❌   │   ❌   │
+    ├─────────────────────────┼───────┼───────┼─────────┼──────────┼────────┼────────┤
+    │ Secretary Dashboard     │  ❌   │  ❌   │   ✅    │    ❌    │   ❌   │   ❌   │
+    │ Secretary POS           │  ❌   │  ❌   │   ✅    │    ❌    │   ❌   │   ❌   │
+    │ Secretary Profile       │  ❌   │  ❌   │   ✅    │    ❌    │   ❌   │   ❌   │
+    ├─────────────────────────┼───────┼───────┼─────────┼──────────┼────────┼────────┤
+    │ Driver Dashboard        │  ❌   │  ❌   │   ❌    │    ✅    │   ❌   │   ❌   │
+    │ My Deliveries           │  ❌   │  ❌   │   ❌    │    ✅    │   ❌   │   ❌   │
+    │ Driver Profile          │  ❌   │  ❌   │   ❌    │    ✅    │   ❌   │   ❌   │
+    │ Driver Settings         │  ❌   │  ❌   │   ❌    │    ✅    │   ❌   │   ❌   │
+    ├─────────────────────────┼───────┼───────┼─────────┼──────────┼────────┼────────┤
+    │ Customer Dashboard      │  ❌   │  ❌   │   ❌    │    ❌    │   ✅   │   ❌   │
+    │ Customer Products       │  ❌   │  ❌   │   ❌    │    ❌    │   ✅   │   ❌   │
+    │ Shopping Cart           │  ❌   │  ❌   │   ❌    │    ❌    │   ✅   │   ❌   │
+    │ Customer Orders         │  ❌   │  ❌   │   ❌    │    ❌    │   ✅   │   ❌   │
+    │ Customer Profile        │  ❌   │  ❌   │   ❌    │    ❌    │   ✅   │   ❌   │
+    │ Customer Settings       │  ❌   │  ❌   │   ❌    │    ❌    │   ✅   │   ❌   │
+    └─────────────────────────┴───────┴───────┴─────────┴──────────┴────────┴────────┘
+
+    * Admin has limited CRUD: create/edit only, archive restricted by conditions
+      (e.g., cannot archive products with stock > 0, cannot manage admin accounts)
+
+
+================================================================================
+12. LAYOUT STRUCTURE PER ROLE
+================================================================================
+
+    SUPER ADMIN / ADMIN — MainLayout
+    ┌─────────────────────────────────────────────────────────────┐
+    │  ┌────────┐  ┌──────────────────────────────────────────┐  │
+    │  │SIDEBAR │  │  HEADER BAR                              │  │
+    │  │(w-72   │  │  [☰ Toggle] [Page Title] [🔔] [👤 User] │  │
+    │  │collapse│  ├──────────────────────────────────────────┤  │
+    │  │to w-20)│  │                                          │  │
+    │  │        │  │              MAIN CONTENT                │  │
+    │  │Dashboard│ │              (Page Component)            │  │
+    │  │Procure │  │                                          │  │
+    │  │Drying  │  │                                          │  │
+    │  │Process │  │                                          │  │
+    │  │Products│  │                                          │  │
+    │  │ ├Variety│ │                                          │  │
+    │  │ └Invent│  │                                          │  │
+    │  │POS     │  │                                          │  │
+    │  │Orders  │  │                                          │  │
+    │  │Partners│  │                                          │  │
+    │  │ ├Suppli│  │                                          │  │
+    │  │ └Custom│  │                                          │  │
+    │  │Staff   │  │                                          │  │
+    │  │Sales   │  │                                          │  │
+    │  │Settings│  │                                          │  │
+    │  │        │  │                                          │  │
+    │  │[Avatar]│  │                                          │  │
+    │  │[Name]  │  │                                          │  │
+    │  │[Logout]│  │                                          │  │
+    │  └────────┘  └──────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────┘
+
+    SECRETARY — StaffLayout
+    ┌─────────────────────────────────────────────────────────────┐
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │  HEADER NAV (sticky top)                             │  │
+    │  │  [Logo] [Dashboard] [Point of Sale] [My Profile] [👤]│  │
+    │  └──────────────────────────────────────────────────────┘  │
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │                                                      │  │
+    │  │                   MAIN CONTENT                       │  │
+    │  │                                                      │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────┘
+
+    DRIVER — DriverLayout
+    ┌─────────────────────────────────────────────────────────────┐
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │  HEADER (Desktop: tab nav | Mobile: logo only)       │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │                                                      │  │
+    │  │                   MAIN CONTENT                       │  │
+    │  │                                                      │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │  BOTTOM NAV (Mobile)                                 │  │
+    │  │  [🏠 Home] [📦 Deliveries] [👤 Profile] [⚙ Settings]│  │
+    │  └──────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────┘
+
+    CUSTOMER — CustomerLayout
+    ┌─────────────────────────────────────────────────────────────┐
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │  HEADER [Logo] [Nav Items] [🛒 Cart(N)] [🔔] [👤]   │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │                                                      │  │
+    │  │                   MAIN CONTENT                       │  │
+    │  │                                                      │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │  BOTTOM NAV (Mobile)                                 │  │
+    │  │  [📊 Dashboard] [🛍 Products] [📋 Orders] [⚙ Settings]│ │
+    │  └──────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────┘
+
+    PUBLIC — PublicLayout
+    ┌─────────────────────────────────────────────────────────────┐
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │  HEADER [Logo] [Home] [About] [Products] [Contact]  │  │
+    │  │                            [Login] [Register]        │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │                                                      │  │
+    │  │                   MAIN CONTENT                       │  │
+    │  │                                                      │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    │  ┌──────────────────────────────────────────────────────┐  │
+    │  │  FOOTER                                              │  │
+    │  │  [Business Info] [Social Links] [Quick Links]        │  │
+    │  │  [Contact Info] [Operating Hours]                    │  │
+    │  └──────────────────────────────────────────────────────┘  │
+    └─────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+13. TECHNOLOGY STACK SUMMARY
+================================================================================
+
+    FRONTEND:
+    ├── React 18+ (SPA via Vite)
+    ├── Tailwind CSS (utility-first styling)
+    ├── React Router DOM v6 (client-side routing)
+    ├── Axios (HTTP client for API calls)
+    ├── Context API (AuthContext, ThemeContext, BusinessContext)
+    ├── React.lazy() + Suspense (code splitting per role)
+    ├── Responsive design (desktop + mobile bottom nav)
+    └── Dark mode support (DB-driven via ThemeContext)
+
+    BACKEND:
+    ├── Laravel 11 (PHP 8.2+)
+    ├── Laravel Sanctum (token-based API authentication)
+    ├── Laravel Fortify (2FA, password management)
+    ├── Inertia.js (optional SSR)
+    ├── Eloquent ORM (models, relationships, scopes)
+    ├── Soft Deletes (archiving system)
+    ├── AuditLogger trait (activity logging)
+    ├── Rate Limiting (throttle middleware)
+    └── Mail (SMTP email support)
+
+    DATABASE:
+    ├── MySQL / MariaDB
+    ├── 20+ tables with relationships
+    ├── Pivot tables for many-to-many
+    ├── Soft deletes (deleted_at columns)
+    └── JSON columns (changes, data, context)
+
+    INFRASTRUCTURE:
+    ├── Vite (build tool & dev server)
+    ├── Laragon (local dev environment)
+    ├── File Storage (images, proofs, backups)
+    └── SMTP (email delivery)
+
+
+================================================================================
+14. SECURITY FEATURES
+================================================================================
+
+    ✅ Role-Based Access Control (RBAC) — EnsureUserHasRole middleware
+    ✅ Token Authentication — Laravel Sanctum (API tokens)
+    ✅ Email Verification — Required before first login (staff & customer)
+    ✅ Session Management — Single active session per account
+    ✅ Rate Limiting — Throttle on login, password reset (6/min)
+    ✅ Soft Deletes — Data preserved, restorable by Super Admin
+    ✅ Audit Trail — All CRUD actions logged with user, IP, changes
+    ✅ Password Hashing — bcrypt via Laravel
+    ✅ CSRF Protection — Laravel default
+    ✅ Input Validation — Request validation on all endpoints
+    ✅ SQL Injection Prevention — Eloquent ORM parameterized queries
+    ✅ XSS Prevention — React auto-escapes, Laravel Blade escaping
+    ✅ CORS Configuration — Configured in config/cors.php
+
+    🔲 PLANNED:
+    🔲 Two-Factor Authentication (2FA) — TOTP for Super Admin & Admin
+       - Laravel Fortify already configured
+       - Database columns exist (two_factor_secret, two_factor_recovery_codes)
+       - Settings route exists (/settings/two-factor)
+       - Controller exists (TwoFactorAuthenticationController)
+       - Needs: frontend UI, login flow integration, enable/disable workflow
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

@@ -1,0 +1,194 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║              KJP RICEMILL — COST CALCULATION GUIDE                 ║
+║           How Production Costs Are Computed Per Product             ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+══════════════════════════════════════════════════════════════════════
+ SUPPLY CHAIN FLOW
+══════════════════════════════════════════════════════════════════════
+
+  PROCUREMENT ──→ DRYING ──→ PROCESSING ──→ PRODUCT (Stock)
+  (Buy rice)     (Dry it)   (Mill it)      (Sell it)
+
+Each step has associated costs. The system traces costs forward
+through the entire chain to compute the final cost per product unit.
+
+
+══════════════════════════════════════════════════════════════════════
+ STEP 1: PROCUREMENT COST (Raw Material)
+══════════════════════════════════════════════════════════════════════
+
+  Formula:  total_cost = quantity_kg × price_per_kg
+
+  Example:
+  - Bought 5,000 kg of Dinorado at ₱10/kg
+  - Procurement Cost = 5,000 × ₱10 = ₱50,000
+
+  This is the cost of the RAW unhusked rice (palay).
+
+
+══════════════════════════════════════════════════════════════════════
+ STEP 2: DRYING COST (Drying Service)
+══════════════════════════════════════════════════════════════════════
+
+  Formula:  total_price = (sacks × price_per_sack) × days
+
+  Example:
+  - 100 sacks dried at ₱5/sack for 3 days
+  - Drying Cost = (100 × ₱5) × 3 = ₱1,500
+
+  This is the cost to dry the rice before milling.
+
+
+══════════════════════════════════════════════════════════════════════
+ STEP 3: PROCESSING (Milling) — Cost Traced, Not Added
+══════════════════════════════════════════════════════════════════════
+
+  Processing takes dried rice and mills it into finished rice.
+  The system does NOT add a separate processing/milling cost.
+  Instead, it TRACES the procurement + drying costs through
+  to the processing output.
+
+  Key fields:
+  - input_kg  : How many kg of dried rice went into the mill
+  - output_kg : How many kg of finished rice came out
+  - husk_kg   : Weight lost (husks/waste)
+  - yield_%   : output_kg / input_kg × 100
+
+  The cost is carried forward proportionally.
+
+
+══════════════════════════════════════════════════════════════════════
+ HOW COST IS COMPUTED FOR A PROCESSING RECORD
+══════════════════════════════════════════════════════════════════════
+
+  Each Processing record links to one or more Drying Sources
+  (via the processing_drying_sources pivot table).
+
+  For EACH drying source used by the processing:
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  fraction = quantity_kg_taken_from_drying / drying_total_kg │
+  │                                                             │
+  │  DRYING COST SHARE:                                         │
+  │    drying_cost = fraction × drying.total_price              │
+  │                                                             │
+  │  PROCUREMENT COST SHARE:                                    │
+  │    (a) If BATCH drying:                                     │
+  │        Sum each batch procurement's (qty_kg × price_per_kg) │
+  │        procurement_cost = fraction × that sum               │
+  │                                                             │
+  │    (b) If INDIVIDUAL drying:                                │
+  │        procurement_cost = fraction ×                        │
+  │          (drying_total_kg × procurement.price_per_kg)       │
+  └─────────────────────────────────────────────────────────────┘
+
+  Then sum across ALL drying sources:
+
+  total_procurement_cost = Σ procurement_cost shares
+  total_drying_cost      = Σ drying_cost shares
+  total_cost             = total_procurement_cost + total_drying_cost
+  cost_per_output_kg     = total_cost / output_kg
+
+
+══════════════════════════════════════════════════════════════════════
+ STEP 4: PRODUCT — COST PER UNIT & PROFIT
+══════════════════════════════════════════════════════════════════════
+
+  When distributing rice from Processing → Product:
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  units = floor(total_kg_distributed / weight_per_unit)      │
+  │                                                             │
+  │  cost_per_unit = total_production_cost / units              │
+  │                                                             │
+  │  profit_per_unit = selling_price - cost_per_unit            │
+  │                                                             │
+  │  profit_margin = (profit_per_unit / selling_price) × 100%   │
+  └─────────────────────────────────────────────────────────────┘
+
+  Example:
+  - Processing output: 4,000 kg, total cost: ₱55,000
+  - Product weight: 50 kg/unit
+  - Units produced: 4,000 / 50 = 80 units
+  - Cost per unit: ₱55,000 / 80 = ₱687.50
+  - Selling price: ₱900/unit
+  - Profit per unit: ₱900 - ₱687.50 = ₱212.50
+  - Profit margin: (₱212.50 / ₱900) × 100 = 23.6%
+
+
+══════════════════════════════════════════════════════════════════════
+ COMPLETE EXAMPLE (END-TO-END)
+══════════════════════════════════════════════════════════════════════
+
+  1. PROCURE:  Buy 10,000 kg at ₱10/kg = ₱100,000 (200 sacks)
+  2. DRY:      200 sacks × ₱5/sack × 2 days = ₱2,000
+  3. PROCESS:  Input 10,000 kg → Output 7,000 kg (70% yield)
+               fraction = 10,000/10,000 = 1.0 (used all dried rice)
+               procurement_cost = 1.0 × ₱100,000 = ₱100,000
+               drying_cost = 1.0 × ₱2,000 = ₱2,000
+               total_cost = ₱102,000
+               cost_per_kg = ₱102,000 / 7,000 = ₱14.57/kg
+  4. PRODUCT:  Weight = 25 kg/unit
+               Units = 7,000 / 25 = 280 units
+               Cost per unit = ₱102,000 / 280 = ₱364.29
+               Selling price = ₱500/unit
+               Profit = ₱500 - ₱364.29 = ₱135.71/unit (27.1% margin)
+
+
+══════════════════════════════════════════════════════════════════════
+ BATCH VS STOCK DISTRIBUTION COST — WHY THEY DIFFER
+══════════════════════════════════════════════════════════════════════
+
+  The PROCUREMENT BATCH TABLE shows the TOTAL cost of the entire
+  batch (ALL sacks, even those not yet dried/processed).
+
+  The STOCK DISTRIBUTION MODAL shows only the cost of the portion
+  that actually went through drying → processing.
+
+  Example:
+  - Batch: 1,000 sacks, ₱472,810 total procurement cost
+  - Only 800 sacks (80%) have been dried and processed so far
+  - Stock Distribution shows: ₱378,248 (= ~80% of ₱472,810)
+  - The remaining 200 sacks (₱94,562) haven't been processed yet
+
+  This is CORRECT — you only see the cost of rice that actually
+  produced finished product. As more sacks get dried & processed,
+  those costs will appear in future distributions.
+
+
+══════════════════════════════════════════════════════════════════════
+ WHERE TO SEE COSTS IN THE APP
+══════════════════════════════════════════════════════════════════════
+
+  1. PROCUREMENT BATCHES TABLE
+     └─ Shows: Total procurement cost + Total drying cost
+     └─ Scope: Entire batch (all sacks)
+
+  2. STOCK DISTRIBUTION MODAL (when adding stock to product)
+     └─ Each processing card shows: ₱X.XX/kg cost badge
+     └─ Summary shows: Procurement cost, Drying cost, Total cost
+     └─ Per-unit: Cost/unit, Selling price, Profit/unit
+     └─ Profit margin indicator (green/amber/red)
+
+  3. PRODUCT VIEW MODAL (click eye icon on product)
+     └─ Production Cost Analysis section
+     └─ Shows: Avg cost/unit, Profit/unit, Profit margin
+     └─ Breakdown: Procurement + Drying totals
+     └─ Based on ALL distributed processings for that variety
+
+
+══════════════════════════════════════════════════════════════════════
+ TIPS FOR PRICING
+══════════════════════════════════════════════════════════════════════
+
+  • Aim for at least 20%+ profit margin (shown in green)
+  • 0-20% margin shows in amber (low margin warning)
+  • Negative margin shows in red (selling below cost!)
+  • Check the Stock Distribution modal BEFORE distributing to see
+    if your selling price covers the production cost
+  • Use the Product View modal to see historical average costs
+  • When items are restocked from voided/returned sales, stock
+    increases but cost data from the original stock-in is preserved
+    in stock_logs for accurate cost analysis
+

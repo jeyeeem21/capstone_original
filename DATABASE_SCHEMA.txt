@@ -1,0 +1,748 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║           KJP RICEMILL — DATABASE SCHEMA REFERENCE                 ║
+║              All Tables & Columns (Final State)                    ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Generated from: laravel_backend/database/migrations/
+Total Tables: 28
+
+
+══════════════════════════════════════════════════════════════════════
+ AUTHENTICATION & USERS
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: users                                                     │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ name                varchar(255)      NOT NULL                   │
+│ role                varchar(20)       NOT NULL, default 'admin'  │
+│ position            varchar(50)       NULLABLE                   │
+│ first_name          varchar(255)      NULLABLE                   │
+│ last_name           varchar(255)      NULLABLE                   │
+│ email               varchar(255)      NOT NULL, UNIQUE           │
+│ phone               varchar(255)      NULLABLE                   │
+│ status              varchar(20)       NOT NULL, default 'active' │
+│ date_hired          date              NULLABLE                   │
+│ email_verified_at   timestamp         NULLABLE                   │
+│ password            varchar(255)      NOT NULL                   │
+│ two_factor_secret   text              NULLABLE                   │
+│ two_factor_recovery_codes  text       NULLABLE                   │
+│ two_factor_confirmed_at    timestamp  NULLABLE                   │
+│ remember_token      varchar(100)      NULLABLE                   │
+│ truck_plate_number  varchar(20)       NULLABLE                   │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: password_reset_tokens                                     │
+├──────────────────────────────────────────────────────────────────┤
+│ email               varchar(255)      PK                         │
+│ token               varchar(255)      NOT NULL                   │
+│ created_at          timestamp         NULLABLE                   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: sessions                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  varchar(255)      PK                         │
+│ user_id             bigint unsigned   NULLABLE, INDEX, FK→users  │
+│ ip_address          varchar(45)       NULLABLE                   │
+│ user_agent          text              NULLABLE                   │
+│ payload             longtext          NOT NULL                   │
+│ last_activity       integer           NOT NULL, INDEX            │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: personal_access_tokens                                    │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ tokenable_type      varchar(255)      NOT NULL                   │
+│ tokenable_id        bigint unsigned   NOT NULL                   │
+│ name                text              NOT NULL                   │
+│ token               varchar(64)       NOT NULL, UNIQUE           │
+│ abilities           text              NULLABLE                   │
+│ last_used_at        timestamp         NULLABLE                   │
+│ expires_at          timestamp         NULLABLE, INDEX            │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ INDEX: tokenable_type + tokenable_id (morphs)                    │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: user_preferences                                          │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ user_id             bigint unsigned   NOT NULL, UNIQUE, FK→users │
+│ theme_mode          enum('light','dark')  default 'light'        │
+│ font_family         varchar(100)      default 'Inter'            │
+│ font_size           tinyint unsigned  default 14                 │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ PRODUCTS & VARIETIES
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: varieties  (originally 'categories', renamed)             │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ name                varchar(255)      NOT NULL, UNIQUE           │
+│ description         text              NULLABLE                   │
+│ color               varchar(20)       default '#22c55e'          │
+│ status              enum('Active','Inactive')  default 'Active'  │
+│ products_count      integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: status                                                    │
+│ INDEX: created_at                                                │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: products                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│ product_id          bigint unsigned   PK, auto-increment         │
+│ product_name        varchar(255)      NOT NULL                   │
+│ variety_id          bigint unsigned   NOT NULL, FK→varieties     │
+│ price               decimal(10,2)     default 0                  │
+│ stocks              integer           default 0                  │
+│ stock_floor         integer           default 0                  │
+│ unit                varchar(255)      default 'kg'               │
+│ weight              decimal(10,2)     NULLABLE                   │
+│ image               varchar(255)      NULLABLE                   │
+│ stock_floor         integer           default 0                  │
+│ status              enum('active','inactive')  default 'active'  │
+│ is_deleted          boolean           default false               │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ INDEX: variety_id (FK)                                           │
+│ INDEX: status                                                    │
+│ INDEX: is_deleted                                                │
+│ INDEX: is_deleted + status (composite)                           │
+│                                                                  │
+│ FK: variety_id → varieties(id) ON DELETE CASCADE                 │
+│ COMMENT stock_floor: Minimum stock threshold — below this is     │
+│         considered low stock                                     │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ SUPPLY CHAIN: PROCUREMENT
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: suppliers                                                 │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ name                varchar(255)      NOT NULL                   │
+│ contact             varchar(255)      NULLABLE                   │
+│ phone               varchar(255)      NULLABLE                   │
+│ email               varchar(255)      NULLABLE, UNIQUE           │
+│ address             text              NULLABLE                   │
+│ status              enum('Active','Inactive')  default 'Active'  │
+│ products            integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: status                                                    │
+│ INDEX: created_at                                                │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: procurement_batches                                       │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ batch_number        varchar(30)       NOT NULL, UNIQUE           │
+│ variety_id          bigint unsigned   NOT NULL, FK→varieties     │
+│ season_date         date              NOT NULL                   │
+│ total_sacks         decimal(10,0)     default 0                  │
+│ total_kg            decimal(14,2)     default 0                  │
+│ remaining_sacks     decimal(10,0)     default 0                  │
+│ remaining_kg        decimal(14,2)     default 0                  │
+│ status              enum('Open','Closed','Completed')            │
+│                                       default 'Open'             │
+│ notes               text              NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: variety_id                                                │
+│ INDEX: status                                                    │
+│ INDEX: season_date                                               │
+│ INDEX: batch_number                                              │
+│                                                                  │
+│ FK: variety_id → varieties(id) ON DELETE RESTRICT                │
+│ COMMENT batch_number: e.g. BATCH-20260222-001                    │
+│ COMMENT status: Open=accepting procurements,                     │
+│         Closed=drying started, Completed=all processed           │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: procurements                                              │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ supplier_id         bigint unsigned   NOT NULL, FK→suppliers     │
+│ variety_id          bigint unsigned   NULLABLE, FK→varieties     │
+│ batch_id            bigint unsigned   NULLABLE, FK→procurement_  │
+│                                       batches                    │
+│ quantity_kg         decimal(12,2)     default 0                  │
+│ sacks               integer           default 0                  │
+│ price_per_kg        decimal(12,2)     default 0                  │
+│ description         text              NULLABLE                   │
+│ total_cost          decimal(14,2)     default 0                  │
+│ status              enum('Pending','Drying','Dried',             │
+│                      'Completed','Cancelled')  default 'Pending' │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: supplier_id                                               │
+│ INDEX: status                                                    │
+│ INDEX: created_at                                                │
+│ INDEX: batch_id                                                  │
+│                                                                  │
+│ FK: supplier_id → suppliers(id) ON DELETE CASCADE                │
+│ FK: variety_id → varieties(id) ON DELETE SET NULL                │
+│ FK: batch_id → procurement_batches(id) ON DELETE SET NULL        │
+│ COMMENT sacks: Number of sacks/bags                              │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ SUPPLY CHAIN: DRYING
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: drying_processes                                          │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ procurement_id      bigint unsigned   NULLABLE, FK→procurements  │
+│ batch_id            bigint unsigned   NULLABLE, FK→procurement_  │
+│                                       batches                    │
+│ quantity_kg         decimal(12,2)     default 0                  │
+│ sacks               integer           default 0                  │
+│ quantity_out        decimal(12,2)     default 0                  │
+│ days                integer           default 0                  │
+│ price               decimal(12,2)     default 0                  │
+│ total_price         decimal(14,2)     default 0                  │
+│ status              enum('Drying','Dried','Cancelled')           │
+│                                       default 'Drying'           │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ dried_at            timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: procurement_id                                            │
+│ INDEX: batch_id                                                  │
+│ INDEX: status                                                    │
+│ INDEX: created_at                                                │
+│                                                                  │
+│ FK: procurement_id → procurements(id) ON DELETE CASCADE          │
+│ FK: batch_id → procurement_batches(id) ON DELETE SET NULL        │
+│ COMMENT quantity_kg: Quantity taken from procurement              │
+│ COMMENT quantity_out: Quantity sent to processing                 │
+│ COMMENT days: Number of drying days                              │
+│ COMMENT price: Drying cost per sack per day                      │
+│ COMMENT total_price: (sacks * price) * days                      │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: drying_batch_procurements  (pivot)                        │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ drying_process_id   bigint unsigned   NOT NULL, FK→drying_       │
+│                                       processes                  │
+│ procurement_id      bigint unsigned   NOT NULL, FK→procurements  │
+│ sacks_taken         decimal(10,0)     default 0                  │
+│ quantity_kg         decimal(14,2)     default 0                  │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ UNIQUE: drying_process_id + procurement_id                       │
+│ INDEX: drying_process_id                                         │
+│ INDEX: procurement_id                                            │
+│                                                                  │
+│ FK: drying_process_id → drying_processes(id) ON DELETE CASCADE   │
+│ FK: procurement_id → procurements(id) ON DELETE CASCADE          │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ SUPPLY CHAIN: PROCESSING (MILLING)
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: processings                                               │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ procurement_id      bigint unsigned   NULLABLE, FK→procurements  │
+│ drying_process_id   bigint unsigned   NULLABLE, FK→drying_       │
+│                                       processes                  │
+│ input_kg            decimal(12,2)     NOT NULL                   │
+│ output_kg           decimal(12,2)     NULLABLE                   │
+│ stock_out           decimal(10,2)     default 0                  │
+│ husk_kg             decimal(12,2)     NULLABLE                   │
+│ yield_percent       decimal(5,2)      NULLABLE                   │
+│ operator_name       varchar(255)      NULLABLE                   │
+│ status              enum('Pending','Processing','Completed')     │
+│                                       default 'Pending'          │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ processing_date     date              NOT NULL                   │
+│ completed_date      date              NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: status                                                    │
+│ INDEX: processing_date                                           │
+│ INDEX: completed_date                                            │
+│ INDEX: created_at                                                │
+│ INDEX: status + created_at (composite)                           │
+│ INDEX: status + completed_date (composite)                       │
+│                                                                  │
+│ FK: procurement_id → procurements(id) ON DELETE SET NULL         │
+│ FK: drying_process_id → drying_processes(id) ON DELETE SET NULL  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: processing_drying_sources  (pivot)                        │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ processing_id       bigint unsigned   NOT NULL, FK→processings   │
+│ drying_process_id   bigint unsigned   NOT NULL, FK→drying_       │
+│                                       processes                  │
+│ quantity_kg         decimal(12,2)     NOT NULL                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ UNIQUE: processing_id + drying_process_id                        │
+│                                                                  │
+│ FK: processing_id → processings(id) ON DELETE CASCADE            │
+│ FK: drying_process_id → drying_processes(id) ON DELETE CASCADE   │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ INVENTORY & STOCK
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: stock_logs                                                │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ product_id          bigint unsigned   NOT NULL, FK→products      │
+│ type                varchar(10)       NOT NULL ('in' or 'out')   │
+│ quantity_before     integer           default 0                  │
+│ quantity_change     integer           default 0                  │
+│ quantity_after      integer           default 0                  │
+│ kg_amount           decimal(12,2)     NULLABLE                   │
+│ source_type         varchar(255)      NULLABLE                   │
+│ source_id           bigint unsigned   NULLABLE                   │
+│ notes               varchar(255)      NULLABLE                   │
+│ source_processing_ids json             NULLABLE                   │
+│ procurement_cost    decimal(14,2)     NULLABLE                   │
+│ drying_cost         decimal(14,2)     NULLABLE                   │
+│ total_cost          decimal(14,2)     NULLABLE                   │
+│ cost_per_unit       decimal(14,2)     NULLABLE                   │
+│ selling_price       decimal(14,2)     NULLABLE                   │
+│ profit_per_unit     decimal(14,2)     NULLABLE                   │
+│ profit_margin       decimal(8,2)      NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ INDEX: product_id + created_at (composite)                       │
+│ INDEX: type                                                      │
+│                                                                  │
+│ FK: product_id → products(product_id) ON DELETE CASCADE          │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ SALES & ORDERS
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: customers                                                 │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ name                varchar(255)      NOT NULL                   │
+│ contact             varchar(255)      NULLABLE                   │
+│ phone               varchar(255)      NULLABLE                   │
+│ email               varchar(255)      NULLABLE, UNIQUE           │
+│ address             text              NULLABLE                   │
+│ status              enum('Active','Inactive')  default 'Active'  │
+│ orders              integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: status                                                    │
+│ INDEX: created_at                                                │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: sales                                                     │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ transaction_id      varchar(255)      NOT NULL, UNIQUE           │
+│ customer_id         bigint unsigned   NULLABLE, FK→customers     │
+│ subtotal            decimal(12,2)     default 0                  │
+│ discount            decimal(12,2)     default 0                  │
+│ delivery_fee        decimal(10,2)     default 0                  │
+│ total               decimal(12,2)     default 0                  │
+│ amount_tendered     decimal(12,2)     default 0                  │
+│ change_amount       decimal(12,2)     default 0                  │
+│ payment_method      varchar(20)       default 'cash'             │
+│ payment_status      varchar(20)       default 'paid'             │
+│ reference_number    varchar(255)      NULLABLE                   │
+│ payment_proof       text              NULLABLE                   │
+│ paid_at             timestamp         NULLABLE                   │
+│ status              varchar(20)       default 'completed'        │
+│ notes               text              NULLABLE                   │
+│ voided_by           varchar(255)      NULLABLE                   │
+│ authorized_by       varchar(255)      NULLABLE                   │
+│ delivery_address    varchar(255)      NULLABLE                   │
+│ distance_km         decimal(8,2)      NULLABLE                   │
+│ driver_name         varchar(255)      NULLABLE                   │
+│ driver_plate_number varchar(20)       NULLABLE                   │
+│ return_reason       varchar(255)      NULLABLE                   │
+│ return_notes        text              NULLABLE                   │
+│ return_proof        text              NULLABLE                   │
+│ return_pickup_driver varchar(255)     NULLABLE                   │
+│ return_pickup_plate varchar(20)       NULLABLE                   │
+│ return_pickup_date  date              NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ INDEX: status                                                    │
+│ INDEX: created_at                                                │
+│                                                                  │
+│ FK: customer_id → customers(id) ON DELETE SET NULL               │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: sale_items                                                │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ sale_id             bigint unsigned   NOT NULL, FK→sales         │
+│ product_id          bigint unsigned   NOT NULL, FK→products      │
+│ quantity            integer           default 1                  │
+│ unit_price          decimal(12,2)     default 0                  │
+│ subtotal            decimal(12,2)     default 0                  │
+│ restocked           boolean           default false               │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ INDEX: product_id                                                │
+│                                                                  │
+│ FK: sale_id → sales(id) ON DELETE CASCADE                        │
+│ FK: product_id → products(product_id) ON DELETE CASCADE          │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ DELIVERY
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: drivers                                                   │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ name                varchar(255)      NOT NULL                   │
+│ contact             varchar(255)      NULLABLE                   │
+│ phone               varchar(255)      NOT NULL                   │
+│ email               varchar(255)      NOT NULL, UNIQUE           │
+│ license_number      varchar(255)      NOT NULL, UNIQUE           │
+│ vehicle_type        varchar(255)      NULLABLE                   │
+│ plate_number        varchar(255)      NULLABLE                   │
+│ address             varchar(255)      NULLABLE                   │
+│ status              enum('Active','Inactive','On Leave')         │
+│                                       default 'Active'           │
+│ total_deliveries    integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: status                                                    │
+│ INDEX: email                                                     │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: delivery_assignments                                      │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ delivery_number     varchar(255)      NOT NULL, UNIQUE           │
+│ driver_id           bigint unsigned   NOT NULL, FK→drivers       │
+│ customer_id         bigint unsigned   NULLABLE, FK→customers     │
+│ destination         varchar(255)      NOT NULL                   │
+│ contact_person      varchar(255)      NULLABLE                   │
+│ contact_phone       varchar(255)      NULLABLE                   │
+│ delivery_date       date              NOT NULL                   │
+│ priority            enum('Low','Normal','High','Urgent')         │
+│                                       default 'Normal'           │
+│ status              enum('Pending','In Transit','Delivered',     │
+│                      'Failed','Cancelled')  default 'Pending'    │
+│ notes               text              NULLABLE                   │
+│ driver_notes        text              NULLABLE                   │
+│ proof_of_delivery   varchar(255)      NULLABLE                   │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
+│ picked_up_at        timestamp         NULLABLE                   │
+│ delivered_at        timestamp         NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
+│                                                                  │
+│ INDEX: status                                                    │
+│ INDEX: delivery_date                                             │
+│ INDEX: driver_id                                                 │
+│                                                                  │
+│ FK: driver_id → drivers(id) ON DELETE CASCADE                    │
+│ FK: customer_id → customers(id) ON DELETE SET NULL               │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: delivery_items                                            │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ delivery_assignment_id  bigint unsigned  NOT NULL, FK→delivery_  │
+│                                          assignments             │
+│ product_id          bigint unsigned   NOT NULL, FK→products      │
+│ product_name        varchar(255)      NOT NULL                   │
+│ quantity            integer           NOT NULL                   │
+│ unit                varchar(255)      default 'kg'               │
+│ price               decimal(10,2)     default 0                  │
+│ total               decimal(10,2)     default 0                  │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ INDEX: delivery_assignment_id                                    │
+│                                                                  │
+│ FK: delivery_assignment_id → delivery_assignments(id) CASCADE    │
+│ FK: product_id → products(product_id)                            │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ SETTINGS & CMS
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: appearance_settings                                       │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ key                 varchar(255)      NOT NULL, UNIQUE           │
+│ value               varchar(255)      NOT NULL                   │
+│ label               varchar(255)      NOT NULL                   │
+│ description         varchar(255)      NULLABLE                   │
+│ category            varchar(255)      NOT NULL                   │
+│ sort_order          integer           default 0                  │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: business_settings                                         │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ key                 varchar(255)      NOT NULL, UNIQUE           │
+│ value               text              NULLABLE                   │
+│ type                varchar(255)      default 'string'           │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: website_contents                                          │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ page                varchar(255)      NOT NULL, INDEX            │
+│ section             varchar(255)      NOT NULL                   │
+│ key                 varchar(255)      NOT NULL                   │
+│ value               text              NULLABLE                   │
+│ meta                json              NULLABLE                   │
+│ sort_order          integer           default 0                  │
+│ is_active           boolean           default true               │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ UNIQUE: page + section + key (composite)                         │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ AUDIT & SYSTEM
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: audit_trails                                              │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ user_id             bigint unsigned   NULLABLE, FK→users         │
+│ action              varchar(20)       NOT NULL                   │
+│ module              varchar(50)       NOT NULL                   │
+│ description         text              NOT NULL                   │
+│ details             json              NULLABLE                   │
+│ ip_address          varchar(45)       NULLABLE                   │
+│ user_agent          text              NULLABLE                   │
+│ created_at          timestamp         NULLABLE                   │
+│ updated_at          timestamp         NULLABLE                   │
+│                                                                  │
+│ INDEX: module + action (composite)                               │
+│ INDEX: created_at                                                │
+│                                                                  │
+│ FK: user_id → users(id) ON DELETE SET NULL                       │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ FRAMEWORK / CACHE / QUEUE
+══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: cache                                                     │
+├──────────────────────────────────────────────────────────────────┤
+│ key                 varchar(255)      PK                         │
+│ value               mediumtext        NOT NULL                   │
+│ expiration          integer           NOT NULL, INDEX            │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: cache_locks                                               │
+├──────────────────────────────────────────────────────────────────┤
+│ key                 varchar(255)      PK                         │
+│ owner               varchar(255)      NOT NULL                   │
+│ expiration          integer           NOT NULL, INDEX            │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: jobs                                                      │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ queue               varchar(255)      NOT NULL, INDEX            │
+│ payload             longtext          NOT NULL                   │
+│ attempts            tinyint unsigned  NOT NULL                   │
+│ reserved_at         int unsigned      NULLABLE                   │
+│ available_at        int unsigned      NOT NULL                   │
+│ created_at          int unsigned      NOT NULL                   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: job_batches                                               │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  varchar(255)      PK                         │
+│ name                varchar(255)      NOT NULL                   │
+│ total_jobs          integer           NOT NULL                   │
+│ pending_jobs        integer           NOT NULL                   │
+│ failed_jobs         integer           NOT NULL                   │
+│ failed_job_ids      longtext          NOT NULL                   │
+│ options             mediumtext        NULLABLE                   │
+│ cancelled_at        integer           NULLABLE                   │
+│ created_at          integer           NOT NULL                   │
+│ finished_at         integer           NULLABLE                   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TABLE: failed_jobs                                               │
+├──────────────────────────────────────────────────────────────────┤
+│ id                  bigint unsigned   PK, auto-increment         │
+│ uuid                varchar(255)      NOT NULL, UNIQUE           │
+│ connection          text              NOT NULL                   │
+│ queue               text              NOT NULL                   │
+│ payload             longtext          NOT NULL                   │
+│ exception           longtext          NOT NULL                   │
+│ failed_at           timestamp         default CURRENT_TIMESTAMP  │
+└──────────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+ TABLE RELATIONSHIPS SUMMARY
+══════════════════════════════════════════════════════════════════════
+
+  users ──┬── user_preferences (1:1)
+          ├── personal_access_tokens (1:N, morphs)
+          ├── audit_trails (1:N)
+          └── sessions (1:N)
+
+  varieties ──┬── products (1:N)
+              ├── procurements (1:N)
+              └── procurement_batches (1:N)
+
+  suppliers ──── procurements (1:N)
+
+  procurement_batches ──┬── procurements (1:N)
+                        └── drying_processes (1:N)
+
+  procurements ──┬── drying_processes (1:N)
+                 └── drying_batch_procurements (1:N)
+
+  drying_processes ──┬── drying_batch_procurements (1:N)
+                     ├── processings (1:N)
+                     └── processing_drying_sources (1:N)
+
+  processings ──── processing_drying_sources (1:N)
+
+  products ──┬── stock_logs (1:N)
+             ├── sale_items (1:N)
+             └── delivery_items (1:N)
+
+  customers ──┬── sales (1:N)
+              └── delivery_assignments (1:N)
+
+  sales ──── sale_items (1:N)
+
+  drivers ──── delivery_assignments (1:N)
+
+  delivery_assignments ──── delivery_items (1:N)
+
+
+══════════════════════════════════════════════════════════════════════
+ SUPPLY CHAIN FLOW
+══════════════════════════════════════════════════════════════════════
+
+  suppliers
+     │
+     ▼
+  procurements ←── procurement_batches (groups by variety/season)
+     │
+     ▼
+  drying_processes ←── drying_batch_procurements (pivot: sacks/kg)
+     │
+     ▼
+  processings ←── processing_drying_sources (pivot: quantity_kg)
+     │
+     ▼
+  products (stock) ←── stock_logs (tracks in/out with cost data)
+     │
+     ▼
+  sales / sale_items ←── customers
+     │
+     ▼
+  delivery_assignments / delivery_items ←── drivers

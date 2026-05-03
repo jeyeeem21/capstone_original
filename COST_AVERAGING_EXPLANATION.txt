@@ -1,0 +1,221 @@
+================================================================================
+COST AVERAGING METHOD — CURRENT BEHAVIOR vs. CORRECT BEHAVIOR
+================================================================================
+
+WHY THIS MATTERS
+----------------
+The system needs to know the cost of each unit sold so it can compute:
+  - Total Cost (per sale)
+  - Profit (Revenue - Cost)
+  - Profit Margin (%)
+
+The cost comes from processing distributions (procurement cost + drying cost).
+The question is: WHICH cost do you assign when you sell a unit?
+
+================================================================================
+CURRENT METHOD: ALL-TIME SIMPLE AVERAGE (BROKEN)
+================================================================================
+
+Formula:
+  avg_cost = SUM(all_distribution_costs_ever) / SUM(all_units_distributed_ever)
+
+Example:
+  - Jan: Distribute 100 units, total cost = ₱20,000  (₱200/unit)
+  - Feb: Distribute 100 units, total cost = ₱50,000  (₱500/unit)
+
+  avg_cost = (₱20,000 + ₱50,000) / (100 + 100)
+           = ₱70,000 / 200
+           = ₱350/unit
+
+Problem Scenario:
+  Suppose in January, you sold all 100 units at ₱300 each.
+  Then in February, your new batch costs ₱500/unit.
+  You sell 10 units from the February batch at ₱600 each.
+
+  CURRENT system says:
+    Cost = 10 × ₱350 = ₱3,500
+    Revenue = 10 × ₱600 = ₱6,000
+    Profit = ₱2,500  (41.7% margin) ← WRONG
+
+  True cost (only February batch is in stock):
+    Cost = 10 × ₱500 = ₱5,000
+    Revenue = 10 × ₱600 = ₱6,000
+    Profit = ₱1,000  (16.7% margin) ← CORRECT
+
+  The system OVERSTATES profit by ₱1,500 because old cheap batches
+  (already fully sold) are still pulling the average down.
+
+================================================================================
+CORRECT METHOD: PERPETUAL WEIGHTED AVERAGE COST (PWAC)
+================================================================================
+
+Formula — recalculated after EVERY new distribution:
+  new_avg = ((units_on_hand × current_avg) + (new_units × new_cost_per_unit))
+            / (units_on_hand + new_units)
+
+The key difference:
+  - Only REMAINING stock in hand at the time of distribution affects the average
+  - Sold-out units no longer influence future cost calculations
+
+Step-by-Step Example (same scenario):
+
+  Initial state: 0 units on hand, avg = ₱0
+
+  BATCH 1 (January):
+    Units on hand before = 0
+    New units = 100, new cost = ₱200/unit
+    new_avg = ((0 × ₱0) + (100 × ₱200)) / (0 + 100)
+            = ₱20,000 / 100
+            = ₱200/unit
+    → Running avg = ₱200/unit, Stock = 100 units
+
+  SALES (January): Sell 100 units at ₱300 each
+    Cost assigned = 100 × ₱200 = ₱20,000 ← uses avg at time of sale
+    Profit = ₱30,000 - ₱20,000 = ₱10,000 ✓
+    → Stock = 0 units (all sold)
+
+  BATCH 2 (February):
+    Units on hand before = 0
+    New units = 100, new cost = ₱500/unit
+    new_avg = ((0 × ₱200) + (100 × ₱500)) / (0 + 100)
+            = ₱50,000 / 100
+            = ₱500/unit
+    → Running avg = ₱500/unit, Stock = 100 units
+
+  SALES (February): Sell 10 units at ₱600 each
+    Cost assigned = 10 × ₱500 = ₱5,000 ← uses avg at time of sale
+    Profit = ₱6,000 - ₱5,000 = ₱1,000 ✓
+
+  Comparison:
+    Current method profit: ₱2,500  (OVERSTATED by ₱1,500)
+    PWAC profit:           ₱1,000  (CORRECT)
+
+================================================================================
+REALISTIC MULTI-BATCH EXAMPLE WITH PARTIAL STOCK REMAINING
+================================================================================
+
+  State: 500 units on hand, running avg = ₱240/unit
+
+  BATCH 3 arrives: 200 new units, cost = ₱600/unit
+
+  Current Method (all-time simple avg):
+    Assumes ALL historical batches are still in play.
+    If earlier batches had lower cost, the new ₱600/unit gets diluted heavily.
+    Result: avg might show ₱280/unit — WRONG for current stock.
+
+  PWAC:
+    new_avg = ((500 × ₱240) + (200 × ₱600)) / (500 + 200)
+            = (₱120,000 + ₱120,000) / 700
+            = ₱240,000 / 700
+            = ₱342.86/unit
+    → Reflects actual blended cost of what's physically in the warehouse.
+
+  If you now sell 100 units at ₱400:
+    PWAC:            Cost = 100 × ₱342.86 = ₱34,286  → Profit = ₱5,714  ✓
+    Current method:  Cost = 100 × ₱280 = ₱28,000     → Profit = ₱12,000 ✗ (overstated)
+
+    
+
+================================================================================
+HOW THE FIX WOULD WORK IN THE SYSTEM
+================================================================================
+
+Current flow (broken):
+  1. Each distribution creates a StockLog (IN) with its own cost_per_unit
+  2. SaleResource adds up ALL IN logs and divides — ignores sales in between
+  3. Every sale gets the same blended cost regardless of when it happened
+
+Fixed flow (PWAC):
+  1. Each distribution still creates a StockLog (IN) with cost data
+  2. At distribution time, system also computes and stores:
+       running_avg_cost = ((stock_before × prev_avg) + (new_units × new_cost)) / stock_after
+  3. This running_avg_cost is stored in the StockLog row
+  4. When computing sale cost:
+       Find the most recent IN stock log BEFORE the sale date for that product
+       Use that log's running_avg_cost as the cost per unit for the sale
+
+This way:
+  - Cost per sale reflects actual market conditions at the time of sale
+  - Rising input costs are captured correctly in future sales
+  - Historical sales are not retroactively distorted by new batches
+  - The profit figures are always accurate and defensible
+
+================================================================================
+WHAT IF OLD STOCK ISN'T FULLY SOLD YET WHEN THE NEW BATCH ARRIVES?
+================================================================================
+
+This is the most common real-world scenario — and PWAC handles it correctly.
+
+PWAC blends the remaining old stock with the new batch automatically:
+
+  new_avg = ((remaining_units × old_avg) + (new_units × new_cost_per_unit))
+            / (remaining_units + new_units)
+
+Example:
+
+  State (end of April):
+    - 300 units still on hand from April batch
+    - Running avg = ₱200/unit
+
+  May batch arrives:
+    - 200 new units distributed
+    - New batch cost = ₱500/unit
+
+  PWAC calculation:
+    new_avg = ((300 × ₱200) + (200 × ₱500)) / (300 + 200)
+            = (₱60,000 + ₱100,000) / 500
+            = ₱160,000 / 500
+            = ₱320/unit
+
+  From this point on, any sale uses ₱320/unit as the cost.
+
+  This makes sense because:
+    - You physically have 300 cheap units mixed with 200 expensive units
+    - You can't tell which bag came from which batch
+    - ₱320 is the fair blended cost of what's actually in your warehouse
+
+  What the current (broken) method does:
+    - It adds the May batch to ALL batches ever (including fully sold ones)
+    - Example: 4 old batches totaling 5,000 units at avg ₱240 + new 200 units at ₱500
+    - new_avg = (₱1,200,000 + ₱100,000) / (5,000 + 200) = ₱250/unit ← WRONG
+    - The 4,700 already-sold units from old batches still drag the average down
+    - Your 200 expensive new units get severely undercosted
+
+ANOTHER EXAMPLE — Price drops after a high-cost batch:
+
+  State: 400 units on hand, running avg = ₱500/unit (expensive month)
+
+  New batch arrives:
+    - 600 new units, new cost = ₱200/unit (price dropped)
+
+  PWAC:
+    new_avg = ((400 × ₱500) + (600 × ₱200)) / (400 + 600)
+            = (₱200,000 + ₱120,000) / 1,000
+            = ₱320/unit
+
+  Sales after this correctly use ₱320/unit — not ₱500 (old) or ₱200 (new alone).
+  The remaining expensive stock is fairly blended with the new cheaper stock.
+
+CONCLUSION:
+  PWAC works correctly whether:
+    ✓ All old stock was sold before new batch (avg resets to new cost)
+    ✓ Old stock partially remains (avg blends old remaining + new)
+    ✓ Price goes up (avg increases appropriately)
+    ✓ Price goes down (avg decreases appropriately)
+
+  The only thing PWAC ignores (correctly) is stock that was already sold —
+  those units are gone and should no longer influence the cost of future sales.
+
+================================================================================
+SUMMARY
+================================================================================
+
+  Method               Tracks sold-out batches?   Accuracy
+  -------------------  -------------------------  ---------
+  All-time Simple Avg  YES (wrong)                Distorted when costs change
+  PWAC (Perpetual WA)  NO (correct)               Accurate per period
+
+  The current system uses All-time Simple Avg.
+  The correct method is PWAC, standard in inventory accounting (PAS 2 / IAS 2).
+
+================================================================================

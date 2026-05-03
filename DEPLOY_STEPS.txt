@@ -1,0 +1,510 @@
+================================================================================
+  DEPLOYMENT STEPS - DENTAL CLINIC SYSTEM   TEST
+  Domain: mcdzn3.com | Hosting: Hostinger Premium
+================================================================================
+  Follow these steps ONE BY ONE. Do not skip ahead.
+================================================================================
+
+
+════════════════════════════════════════
+  PART 1: HOSTINGER - CREATE DATABASE
+════════════════════════════════════════
+
+1. On hPanel dashboard (hpanel.hostinger.com/websites/mcdzn3.com)
+2. Left sidebar → Click "Databases"
+3. Click "Management"
+4. Click "Create a new MySQL database" button
+5. Fill in:
+     Database name:  dental_clinic
+     Username:       dental_user
+     Password:       click "Generate" button
+6. Click "Create"
+7. ⚠️ SAVE THESE — you'll need them later:
+     Full DB name:     u_________dental_clinic   (copy exact name shown)
+     Full username:    u_________dental_user      (copy exact name shown)
+     Password:         ________________           (the one you generated)
+     Host:             localhost
+
+
+════════════════════════════════════════
+  PART 2: HOSTINGER - CREATE SUBDOMAIN
+════════════════════════════════════════
+
+1. Left sidebar → Click "Domains"
+2. Click "Subdomains"
+3. In the "Subdomain" field type:  api
+4. Make sure domain shows:         mcdzn3.com
+5. Click "Create"
+6. ✅ This creates:  api.mcdzn3.com  (your Laravel API address)
+
+
+════════════════════════════════════════
+  PART 3: HOSTINGER - ENABLE SSH
+════════════════════════════════════════
+
+1. Left sidebar → Click "Advanced"
+2. Click "SSH Access"
+3. Toggle SSH to ON (enable it)
+4. ⚠️ SAVE THESE — you'll need them:
+     SSH host:      ________________  (shown on the page)
+     SSH port:      65002             (Hostinger default)
+     SSH username:  ________________  (shown on the page)
+     SSH password:  your hPanel login password
+
+
+════════════════════════════════════════
+  PART 4: GENERATE SSH KEY (on your LOCAL PC)
+════════════════════════════════════════
+
+Your SSH credentials (already confirmed):
+  Host:      37.44.245.132
+  Port:      65002
+  Username:  u940130461
+
+Step A — Open PowerShell on your PC and run this command:
+
+ssh-keygen -t rsa -b 4096 -C "github-deploy" -f "$HOME\.ssh\hostinger_deploy"
+   (Just press Enter if asked anything — it will generate 2 files)
+
+Step B — Get the PUBLIC key (run this):
+
+   Get-Content "$HOME\.ssh\hostinger_deploy.pub"
+Get-Content "$HOME\.ssh\hostinger_deploy.pub"
+   Copy the entire output (starts with ssh-rsa ...)
+ 
+
+
+ public key output 
+ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQD01ok8psZWs/LjvOfn1TdI5anwQBdWFF2GmNKeCgb1AvcWN0U//oVv8lv/n7QoLxmkseBKMNmUZrJAbCMfqf7+9uXHGbbstAilQdZadwPC/gNkuROyNJ2/yrFrG4EjUjoRH3jnVpc7R/pYz19drQQWKHRSk0YEzpCiaw0Sccp0FyoBmAn8yiyT4MOyqjs/mDoDXBcIazR5I03ZYXcap7ydnTl0uHjcwNEUU4BbN889E5qETwa+QTD1VfsyBr9fCQonPUMRMHTW/nwe4DcHH56UfAZthzzIC678vDnMKxsSxSlL89p6DDI1YGeIKs6QNZYHA6YqWK3e5E2+TZPinvHL3g11gRJzUJn9Tyt2xLL8yafFzfeY2CKssE14EyjdcfMCblsOefaIcQWAeGbEYJNtiUwDkxMqeW6Gt9FWiEKH2QRSQyzKic7VbyTOpyMKGEJFEfbzXb2Arwy2VaAlAuOKiwAWRIlpatnJxc9BgegXv9QFKX4YeivH/amAJ/kHX0z5DYZkc8UwCIgHnVuVXiyyq8bksRaKQvgPxGkWwWmAGtOi53gFNk5LY82mrlnQH5KiPtWCkNQ1kLSglKL1xsSwz3c8jvc+spyYcy9qcrclvn4glZc9lhissCssL0USPO4tzVoIg4jJ0ynPtD23U1v3dVG7sqzrg4UiFlZE/xwyiQ== github-deploy
+
+
+Step C — Add public key to Hostinger:
+   1. Go back to hPanel → Advanced → SSH Access
+   2. Click "Add SSH key"
+   3. Paste the public key you copied
+   4. Name it: github-deploy
+   5. Click Add / Save
+
+Step D — Get the PRIVATE key (run this):
+
+   Get-Content "$HOME\.ssh\hostinger_deploy"
+
+   ⚠️ Copy the ENTIRE output including:
+      -----BEGIN OPENSSH PRIVATE KEY-----
+      ...all the lines...
+      -----END OPENSSH PRIVATE KEY-----
+
+   Save it in Notepad — you'll need it for GitHub Secrets in Part 6.
+-----BEGIN OPENSSH PRIVATE KEY-----
+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
+-----END OPENSSH PRIVATE KEY-----
+
+
+
+Step E — Test SSH connection (run this):
+
+   ssh -i "$HOME\.ssh\hostinger_deploy" -p 65002 u940130461@37.44.245.132
+
+   If it connects → type "exit" to disconnect. ✅ SSH is working!
+
+
+════════════════════════════════════════
+  PART 5: LOCAL PC - PUSH TO GITHUB
+════════════════════════════════════════
+
+Do this on your PC (not Hostinger):
+
+1. Go to https://github.com and sign in (or create account)
+2. Click "+" → "New repository"
+3. Name: dental-clinic-system
+4. Set to PRIVATE
+5. Click "Create repository"
+
+6. Open PowerShell on your PC:
+
+   cd "c:\laragon\www\Jeyeeem's files\App_Dev\App_Dev"
+
+7. Create .gitignore file (run this command):
+
+   @"
+node_modules/
+vendor/
+.env
+python-ml-service/venv/
+email-service/
+frontend-react/dist/
+*.bat
+*.ps1
+"@ | Out-File -FilePath .gitignore -Encoding utf8
+
+8. Initialize git and push:
+
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git branch -M main
+   git remote add origin https://github.com/YOUR_USERNAME/dental-clinic-system.git
+   git push -u origin main
+
+   (Replace YOUR_USERNAME with your actual GitHub username)
+
+9. ✅ Your code is now on GitHub
+
+
+════════════════════════════════════════
+  PART 6: GITHUB - ADD SSH SECRET
+════════════════════════════════════════
+
+(This lets GitHub connect to your Hostinger server)
+
+1. Go to your GitHub repo page
+2. Click "Settings" tab
+3. Left sidebar → "Secrets and variables" → "Actions"
+4. Click "New repository secret"
+5. Add these secrets one by one:
+
+   Name: SSH_HOST
+   Value: (your SSH host from Part 3)
+
+   Name: SSH_PORT
+   Value: 65002
+
+   Name: SSH_USERNAME
+   Value: (your SSH username from Part 3)
+
+   Name: SSH_PRIVATE_KEY
+   Value: (the private key from Part 4 - paste the entire key including header/footer)
+
+
+════════════════════════════════════════
+  PART 7: CREATE GITHUB ACTIONS WORKFLOW
+════════════════════════════════════════
+
+Do this on your LOCAL PC:
+
+1. Open PowerShell:
+
+   cd "c:\laragon\www\Jeyeeem's files\App_Dev\App_Dev"
+   New-Item -ItemType Directory -Force -Path ".github\workflows"
+
+2. Create the workflow file:
+   (I will create this file for you - just paste the path in VS Code)
+
+   File: .github/workflows/deploy.yml
+
+   Content: (see below - I will create this file)
+
+3. Push to GitHub:
+
+   git add .github
+   git commit -m "Add auto-deploy workflow"
+   git push
+
+
+════════════════════════════════════════
+  PART 8: HOSTINGER - FIRST-TIME SETUP
+════════════════════════════════════════
+
+Do this once via SSH on your PC:
+(Open PowerShell)
+
+   ssh YOUR_SSH_USERNAME@YOUR_SSH_HOST -p 65002
+
+Then run these commands:
+
+   # Clone your repo to the server
+   cd ~
+   git clone https://github.com/YOUR_USERNAME/dental-clinic-system.git app
+
+   # Point api.mcdzn3.com to Laravel's public folder
+   rm -rf ~/public_html/api.mcdzn3.com
+   ln -s ~/app/laravel-backend/public ~/public_html/api.mcdzn3.com
+
+   # Install PHP dependencies
+   cd ~/app/laravel-backend
+   composer install --optimize-autoloader --no-dev
+
+   # Create .env file
+   cp .env.example .env
+   nano .env
+   (Edit the values - see Part 9)
+
+   # Initialize Laravel
+   php artisan key:generate
+   php artisan migrate --force
+   php artisan db:seed --force
+   php artisan config:cache
+   php artisan route:cache
+   php artisan view:cache
+   chmod -R 775 storage bootstrap/cache
+   php artisan storage:link
+
+
+════════════════════════════════════════
+  PART 9: LARAVEL .ENV VALUES
+════════════════════════════════════════
+
+When editing .env on the server, set these values:
+
+APP_NAME="MCDZ Dental Clinic"
+APP_ENV=production
+APP_KEY=                              ← auto-filled by key:generate
+APP_DEBUG=false
+APP_URL=https://api.mcdzn3.com
+
+DB_CONNECTION=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_DATABASE=u_________dental_clinic   ← from Part 1
+DB_USERNAME=u_________dental_user     ← from Part 1
+DB_PASSWORD=your_generated_password   ← from Part 1
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_PATH=/
+SESSION_DOMAIN=.mcdzn3.com
+
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+FILESYSTEM_DISK=local
+
+SANCTUM_STATEFUL_DOMAINS=mcdzn3.com,www.mcdzn3.com,api.mcdzn3.com
+FRONTEND_URL=https://mcdzn3.com
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your-gmail@gmail.com
+MAIL_PASSWORD=xxxx xxxx xxxx xxxx    ← Gmail App Password (NOT regular password)
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=your-gmail@gmail.com
+MAIL_FROM_NAME="MCDZ Dental Clinic"
+
+SENTIMENT_SERVICE_URL=https://dental-ml-service.onrender.com
+SENTIMENT_SERVICE_TIMEOUT=30
+SENTIMENT_USE_MOCK=false
+
+
+════════════════════════════════════════
+  PART 10: BUILD & UPLOAD REACT FRONTEND
+════════════════════════════════════════
+
+Do this on your LOCAL PC:
+
+1. Open PowerShell:
+
+   cd "c:\laragon\www\Jeyeeem's files\App_Dev\App_Dev\frontend-react"
+
+2. Create .env.production file with this content:
+
+   VITE_API_URL=https://api.mcdzn3.com/api
+   VITE_BASE_URL=https://api.mcdzn3.com
+
+3. Build:
+
+   npm install
+   npm run build
+
+4. Upload dist/ folder contents to Hostinger:
+   - hPanel → Files → File Manager
+   - Go to public_html/
+   - Delete the default index.html if any
+   - Upload everything INSIDE the dist/ folder
+
+5. Create .htaccess in public_html/:
+
+   Content:
+   <IfModule mod_rewrite.c>
+       RewriteEngine On
+       RewriteBase /
+       RewriteCond %{REQUEST_FILENAME} !-f
+       RewriteCond %{REQUEST_FILENAME} !-d
+       RewriteRule ^ index.html [QSA,L]
+   </IfModule>
+
+
+════════════════════════════════════════
+  PART 11: DEPLOY PYTHON ML ON RENDER.COM
+════════════════════════════════════════
+
+1. Go to https://render.com → Sign up with GitHub
+2. Click "New +" → "Web Service"
+3. Connect your GitHub repo (dental-clinic-system)
+4. Configure:
+     Root Directory:  python-ml-service
+     Runtime:         Python 3
+     Build Command:   pip install -r requirements.txt
+     Start Command:   gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+     Instance Type:   Free
+5. Add Environment Variables:
+     FLASK_ENV = production
+     PYTHONUNBUFFERED = 1
+6. Click "Create Web Service"
+7. Wait for deploy (~5 min)
+8. Copy your URL:  https://dental-ml-service.onrender.com
+9. SSH into Hostinger → update .env:
+     SENTIMENT_SERVICE_URL=https://dental-ml-service.onrender.com
+   Then run: php artisan config:cache
+
+10. Set up cron-job.org (free) to ping Render every 14 min:
+    URL: https://dental-ml-service.onrender.com
+    (Prevents free tier from sleeping)
+
+
+════════════════════════════════════════
+  PART 12: SSL CERTIFICATE
+════════════════════════════════════════
+
+1. hPanel → Security → SSL
+2. Install SSL for mcdzn3.com (probably already done)
+3. Install SSL for api.mcdzn3.com
+4. Enable "Force HTTPS" for both
+
+
+════════════════════════════════════════
+  AFTER INITIAL SETUP: AUTO-DEPLOY
+════════════════════════════════════════
+
+Once everything above is done, future updates are automatic:
+
+  BACKEND UPDATE:
+  - Edit your Laravel code locally
+  - git add . && git commit -m "Update" && git push
+  - GitHub Actions automatically SSHs into Hostinger and deploys!
+
+  FRONTEND UPDATE:
+  - Edit React code locally
+  - npm run build  (in frontend-react/)
+  - Upload new dist/ contents to public_html/
+  (Or add this to GitHub Actions too)
+
+  ML UPDATE:
+  - Edit python-ml-service/ code
+  - git push → Render auto-deploys!
+
+
+════════════════════════════════════════
+  PART 13: DEPLOYING FROM ANOTHER LAPTOP
+════════════════════════════════════════
+
+If you switch to a new PC/laptop, here's what you need to do:
+
+--- STEP 1: Install Prerequisites ---
+  - Git:     https://git-scm.com
+  - Node.js: https://nodejs.org
+  (PHP + Composer only needed if testing Laravel locally)
+
+--- STEP 2: Clone the Repo ---
+  Open PowerShell:
+  git clone https://github.com/YOUR_USERNAME/dental-clinic-system.git
+  cd dental-clinic-system
+
+--- STEP 3: Set Up SSH Key (needed for frontend SCP upload) ---
+
+  OPTION A — Copy key from original PC (easiest):
+  1. On your OLD PC, run:
+       Get-Content "$HOME\.ssh\hostinger_deploy"      ← private key
+       Get-Content "$HOME\.ssh\hostinger_deploy.pub"  ← public key
+  2. On the NEW laptop:
+       New-Item -ItemType Directory -Force "$HOME\.ssh"
+       notepad "$HOME\.ssh\hostinger_deploy"      ← paste private key, save
+       notepad "$HOME\.ssh\hostinger_deploy.pub"  ← paste public key, save
+       icacls "$HOME\.ssh\hostinger_deploy" /inheritance:r /grant:r "$env:USERNAME:R"
+
+  OPTION B — Generate a NEW key on new laptop (more secure):
+  1. Run:
+       ssh-keygen -t rsa -b 4096 -C "deploy-laptop2" -f "$HOME\.ssh\hostinger_deploy"
+  2. Add the new PUBLIC key to Hostinger:
+       hPanel → Advanced → SSH Access → Add SSH Key
+       paste contents of: "$HOME\.ssh\hostinger_deploy.pub"
+  3. Update GitHub Secret SSH_PRIVATE_KEY with the new private key:
+       GitHub repo → Settings → Secrets and variables → Actions
+       → Edit SSH_PRIVATE_KEY → paste contents of "$HOME\.ssh\hostinger_deploy"
+
+--- STEP 4: Deploy ---
+
+  BACKEND (automatic — no extra setup):
+    git add . && git commit -m "Update" && git push
+    ✅ GitHub Actions handles the SSH to Hostinger automatically
+
+  FRONTEND (needs SSH key from Step 3):
+    cd frontend-react
+    npm install
+    npm run build
+    scp -i "$HOME\.ssh\hostinger_deploy" -P 65002 -r dist/* u940130461@37.44.245.132:~/domains/mcdzn3.com/public_html/
+
+  ML SERVICE (automatic — no extra setup):
+    git push → Render auto-deploys ✅
+
+--- SUMMARY ---
+  Backend  → just git push, GitHub Actions does everything
+  Frontend → needs Node.js + SSH key (Option A or B above)
+  ML       → just git push, Render does everything
+  ⚠️  The SSH private key ($HOME\.ssh\hostinger_deploy) is the only
+      thing that does NOT transfer automatically to a new machine.
+
+
+================================================================================
+  PROGRESS CHECKLIST
+================================================================================
+
+  Part 1  - Create MySQL Database          [✅]
+  Part 2  - Create api.mcdzn3.com          [✅]
+  Part 3  - Enable SSH                     [✅]
+  Part 4  - Generate SSH Key               [✅]
+  Part 5  - Push to GitHub                 [✅]
+  Part 6  - Add GitHub Secrets             [✅]
+  Part 7  - Create deploy.yml workflow     [✅]
+  Part 8  - First-time server setup        [🔄] ← IN PROGRESS (run migrate --force)
+  Part 9  - Configure .env                 [✅]
+  Part 10 - Build & upload React           [ ]
+  Part 11 - Deploy Python ML               [ ]
+  Part 12 - SSL Certificate                [ ]
+
+================================================================================

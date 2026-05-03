@@ -1,0 +1,376 @@
+===============================================================================
+        KJP RICEMILL — ADMIN & SUPER ADMIN FUNCTIONALITY AUDIT REPORT
+                        Updated: March 10, 2026
+===============================================================================
+
+TABLE OF CONTENTS:
+  1. SYSTEM OVERVIEW
+  2. SOFT DELETE / ARCHIVE STATUS (ALL MODULES)
+  3. ADMIN PAGES & FEATURES (COMPLETE LIST)
+  4. SUPER ADMIN-ONLY FEATURES
+  5. FEATURE-BY-FEATURE STATUS
+  6. KNOWN ISSUES / NOTES
+
+===============================================================================
+1. SYSTEM OVERVIEW
+===============================================================================
+
+Frontend:  React (Vite) + Tailwind CSS  →  Port 5173
+Backend:   Laravel 11 + Sanctum Auth    →  Port 8000
+Database:  MySQL via Laragon
+
+Roles: super_admin, admin, staff, client, driver
+
+Admin & Super Admin share the SAME pages (same route components).
+Difference is in-page conditional logic (isSuperAdmin()) that shows/hides
+certain buttons (Delete/Archive, Settings tabs, etc.).
+
+===============================================================================
+2. SOFT DELETE / ARCHIVE STATUS — ALL MODULES
+===============================================================================
+
+All delete actions now perform SOFT DELETE. No data is permanently removed 
+from the database. Archived records can be restored from Settings → Archives.
+
+┌─────────────────────┬──────────────┬────────────────────────────────────────┐
+│ MODULE              │ SOFT DELETE  │ MECHANISM                              │
+├─────────────────────┼──────────────┼────────────────────────────────────────┤
+│ Products            │ ✅ YES       │ Custom: is_deleted boolean + scopes    │
+│ Varieties           │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Suppliers           │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Customers           │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Procurements        │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Procurement Batches │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Drying Processes    │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Processings         │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Drivers             │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Deliveries          │ ✅ YES       │ Laravel SoftDeletes trait              │
+│ Users (Staff/Admin) │ ✅ YES       │ Laravel SoftDeletes trait (JUST ADDED) │
+│ Sales               │ N/A          │ Uses status lifecycle (voided/returned)│
+│ Audit Trail         │ N/A          │ Read-only log, never deleted           │
+│ Settings            │ N/A          │ Config records, never deleted          │
+│ Website Content     │ N/A          │ CMS content, never deleted             │
+└─────────────────────┴──────────────┴────────────────────────────────────────┘
+
+Archive Page: Shows all soft-deleted records from ALL modules above.
+              Actions: Restore only. Permanent Delete REMOVED.
+              Restored records return to Active status automatically.
+
+===============================================================================
+3. ADMIN PAGES & FEATURES — COMPLETE LIST
+===============================================================================
+
+ Page                    Path                              File
+─────────────────────────────────────────────────────────────────────────────
+ Dashboard               /admin/dashboard                  pages/admin/Dashboard/Dashboard.jsx
+ Procurement             /admin/procurement                pages/admin/Procurement/Procurement.jsx
+ Drying Process          /admin/drying                     pages/admin/DryingProcess/DryingProcess.jsx
+ Processing              /admin/processing                 pages/admin/Processing/Processing.jsx
+ Products                /admin/products                   pages/admin/Products/Products.jsx
+ Varieties               /admin/products/varieties         pages/admin/Products/Varieties.jsx
+ Inventory               /admin/products/inventory         pages/admin/Products/Inventory.jsx
+ Point of Sale           /admin/pos                        pages/shared/PointOfSale/PointOfSale.jsx
+ Orders                  /admin/orders                     pages/admin/Orders/Orders.jsx
+ Partners (Overview)     /admin/partners                   pages/admin/Partners/Partners.jsx
+ Supplier                /admin/partners/supplier          pages/admin/Partners/Supplier.jsx
+ Customer                /admin/partners/customer          pages/admin/Partners/Customer.jsx
+ Staff Management        /admin/staff-management           pages/admin/StaffManagement/StaffManagement.jsx
+ Sales                   /admin/sales                      pages/admin/Sales/Sales.jsx
+ Settings                /admin/settings                   pages/admin/Settings/Settings.jsx
+   └─ Admin Accounts     (Settings sub-tab)                pages/admin/Settings/AdminAccounts.jsx
+   └─ Audit Trail        (Settings sub-tab)                pages/admin/AuditTrail/AuditTrail.jsx
+   └─ Archives           (Settings sub-tab)                pages/admin/Archives/Archives.jsx
+
+NOTE: Categories.jsx exists but is NOT routed — it's an unused duplicate of
+      Varieties.jsx. Can be safely ignored or deleted.
+
+===============================================================================
+4. SUPER ADMIN-ONLY FEATURES
+===============================================================================
+
+These features are ONLY visible/accessible to super_admin role:
+
+ ► Delete/Archive buttons on: Products, Inventory, Varieties,
+   Suppliers, Customers, Staff Management
+ ► Settings → General tab (Business name, email, phone, address, hours,
+   logo, footer, social media, shipping rates, warehouse address)
+ ► Settings → Appearance tab (Theme colors, font size, dark mode)
+ ► Settings → Information tab (Website CMS — Home hero, features, About)
+ ► Settings → Data tab (Database info, SQL backup export)
+ ► Settings → Accounts tab (Admin account CRUD)
+ ► Settings → Audit Trail tab (System activity logs)
+ ► Settings → Archives tab (Restore soft-deleted records)
+ ► POS → Void transaction without admin password
+
+Admin sees ONLY: Settings → Profile, Settings → Security
+
+===============================================================================
+5. FEATURE-BY-FEATURE STATUS
+===============================================================================
+
+Legend:  ✅ = Working   ⚠️ = See Notes   ❌ = Not Working / Missing
+
+─── DASHBOARD ────────────────────────────────────────────────────────────────
+ ✅ Stats cards (revenue, orders, customers, products)
+ ✅ Revenue line chart (daily/monthly/yearly period selector)
+ ✅ Processing pipeline bar chart
+ ✅ Procurement stats
+ ✅ Inventory health donut chart
+ ✅ Top products bar chart
+ ✅ Recent sales table
+ ✅ Low stock alert table
+ ✅ Recent activity feed
+ ✅ Refresh data button
+
+─── PROCUREMENT ──────────────────────────────────────────────────────────────
+ ✅ Create procurement (with supplier select or create new supplier inline)
+ ✅ View procurement details (modal)
+ ✅ Edit procurement (remarks-only for dried status)
+ ✅ Delete/Archive procurement (soft delete → status "Cancelled")
+ ✅ Create batch
+ ✅ Close batch
+ ✅ Send to drying (individual or batch)
+ ✅ View batch details
+ ✅ Records / Batches table toggle
+ ✅ Filter records by batch
+ ✅ Line chart (daily/monthly/yearly)
+ ✅ Donut chart (status breakdown)
+ ✅ Search, sort, pagination
+
+─── DRYING PROCESS ───────────────────────────────────────────────────────────
+ ✅ Add drying (from procurement or batch)
+ ✅ View drying details (modal)
+ ✅ Increment Day (+1 day button)
+ ✅ Mark as Dried (checkmark action)
+ ✅ Return to procurement (only Drying/Postponed status with 0 days)
+ ✅ Delete/Archive drying (soft delete, reverts procurement quantities)
+ ✅ Filter by batch
+ ✅ Line chart, Donut chart
+ ⚠️ Postpone action exists in backend route but frontend button not visible
+    (Route: POST /drying-processes/{id}/postpone — backend-only for now)
+
+─── PROCESSING ───────────────────────────────────────────────────────────────
+ ✅ Add processing (select from dried sources)
+ ✅ View processing details
+ ✅ Edit processing (Pending status only)
+ ✅ Delete/Archive processing (Pending status only, soft delete)
+ ✅ Start Processing (Pending → Processing status)
+ ✅ Complete Processing (with output_kg, husk_kg, yield_percent)
+ ✅ Return to Processing (Completed → Processing, for reprocessing)
+ ✅ Active / Completed tables
+ ✅ Line chart, Donut chart
+
+─── PRODUCTS ─────────────────────────────────────────────────────────────────
+ ✅ Add product (variety, name, price, weight, description, image upload)
+ ✅ View product details
+ ✅ Edit product (with image update/replace)
+ ✅ Delete/Archive product (super_admin only, custom soft delete)
+ ✅ Product image upload (FormData, stored in storage/products/)
+ ✅ Public pages show product image with business logo fallback
+ ✅ Search, sort, pagination
+
+─── VARIETIES ────────────────────────────────────────────────────────────────
+ ✅ Add variety (name, description, color code)
+ ✅ View variety details
+ ✅ Edit variety
+ ✅ Delete/Archive variety (soft delete, status → Inactive)
+
+─── INVENTORY ────────────────────────────────────────────────────────────────
+ ✅ Add product (same as Products page)
+ ✅ View product details + cost analysis
+ ✅ Edit product
+ ✅ Delete/Archive product (super_admin only)
+ ✅ Add/Distribute Stock (from completed processings)
+ ✅ Set Stock Floor (minimum stock alert level)
+ ✅ Toggle product status (active/inactive)
+ ✅ Cost analysis view (per product)
+
+─── POINT OF SALE ────────────────────────────────────────────────────────────
+ ✅ Browse products (grid with search/filter)
+ ✅ Add to cart / adjust quantities / remove from cart
+ ✅ Select existing customer or create new
+ ✅ Toggle delivery mode ON/OFF
+ ✅ Delivery address search with autocomplete (OpenRouteService geocoding)
+ ✅ Distance/shipping fee calculation
+ ✅ Place order/sale
+ ✅ Cash payment (with tendered amount + change calculation)
+ ✅ GCash payment (reference number + proof photo upload/camera capture)
+ ✅ COD payment (for delivery orders)
+ ✅ Pay Later payment method
+ ✅ Void transaction (search recent, select, enter reason)
+ ✅ Super Admin voids without password; others need admin password
+ ✅ Sale complete modal (receipt summary)
+
+─── ORDERS ───────────────────────────────────────────────────────────────────
+ ✅ View all orders with status tabs (All, Pending, Processing, Shipped,
+    Delivered, Return Requested, Picking Up, Returned, Cancelled)
+ ✅ View order details (modal with items, addresses, driver info, 
+    payment proof, return proof images)
+ ✅ Progress status (Pending → Processing → Shipped → Delivered)
+ ✅ Ship order (assign driver + plate number + estimated delivery date)
+ ✅ Cancel order (with confirmation)
+ ✅ Request return (with reason, notes, proof photos — multi-image)
+ ✅ Accept return (assign pickup driver + plate + estimated pickup date)
+ ✅ Reject return (reverts status to delivered)
+ ✅ Mark as Returned (driver pickup complete → stock restored)
+ ✅ Restock items selectively (per-item quantity selection after void/return)
+ ✅ Record Payment (mark unpaid orders as paid — cash or GCash + proof)
+ ✅ Payment status display (Not Paid / Paid badges)
+ ✅ Proof image lightbox (click to enlarge, z-index fixed above modals)
+ ✅ Void tracking (voided_by + authorized_by recorded on sale)
+ ✅ Search, sort, date filter, pagination
+
+─── PARTNERS (OVERVIEW) ──────────────────────────────────────────────────────
+ ✅ Combined view of suppliers + customers
+ ✅ Quick navigation to supplier/customer subpages
+
+─── SUPPLIER ─────────────────────────────────────────────────────────────────
+ ✅ Add supplier (name, email, phone, address)
+ ✅ View supplier details + procurement history
+ ✅ Edit supplier
+ ✅ Delete/Archive supplier (super_admin only, soft delete, status→Inactive)
+ ✅ Email uniqueness check
+ ✅ View procurement history per supplier
+
+─── CUSTOMER ─────────────────────────────────────────────────────────────────
+ ✅ Add customer (name, email, phone, address)
+ ✅ View customer details + order history
+ ✅ Edit customer
+ ✅ Delete/Archive customer (super_admin only, soft delete, status→Inactive)
+ ✅ Create customer account (user login credentials)
+ ✅ Send email verification code
+ ✅ Verify code
+ ✅ Email uniqueness check
+ ✅ View order history per customer
+
+─── STAFF MANAGEMENT ─────────────────────────────────────────────────────────
+ ✅ Add staff (name, email, password, position, phone, date_hired)
+ ✅ View staff list with role/position filters
+ ✅ Edit staff
+ ✅ Delete/Archive staff (super_admin only, NOW soft delete → Archives)
+ ✅ Position assignment (Secretary, Driver)
+ ✅ Truck plate number for drivers
+ ✅ Status management (active/inactive)
+
+─── SALES ────────────────────────────────────────────────────────────────────
+ ✅ View all completed transactions (read-only)
+ ✅ Status tabs (All, Delivered, Completed, Cancelled, Returned, Voided)
+ ✅ Combined "Paid/Not Paid Sales" card with toggle for filtered view
+ ✅ View sale details (modal with items, payment info, proof images)
+ ✅ Proof image lightbox (z-index fixed)
+ ✅ Line chart (daily/monthly/yearly)
+ ✅ Donut chart (sales breakdown)
+ ✅ Predictive Analytics toggle (AI/ML sales predictions)
+ ✅ Search, sort, date filter, pagination
+
+─── SETTINGS — GENERAL (Super Admin) ────────────────────────────────────────
+ ✅ Business name, tagline, email, phone, address
+ ✅ Operating hours configuration
+ ✅ Logo upload
+ ✅ Footer settings
+ ✅ Social media links
+ ✅ Shipping rates configuration
+ ✅ Warehouse address
+
+─── SETTINGS — PROFILE ───────────────────────────────────────────────────────
+ ✅ View/Edit first name, last name, email, phone
+ ✅ Role display (read-only)
+
+─── SETTINGS — SECURITY ──────────────────────────────────────────────────────
+ ✅ Change password (current password + new password + confirm)
+
+─── SETTINGS — APPEARANCE (Super Admin) ──────────────────────────────────────
+ ✅ Theme color picker (primary/border color, button color)
+ ✅ Font size slider
+ ✅ Dark/Light mode toggle
+ ✅ Layout options
+ ✅ Save / Reset theme
+ ✅ Database-driven: colors stored in appearance_settings table, applied
+    via ThemeContext → CSS variables → Tailwind classes across ALL pages
+
+─── SETTINGS — INFORMATION (Super Admin) ─────────────────────────────────────
+ ✅ Website content management (CMS)
+ ✅ Home page: Hero section (title, subtitle, CTA, hero image)
+ ✅ Home page: Features section (cards configuration)
+ ✅ About page: Section management
+
+─── SETTINGS — DATA (Super Admin) ────────────────────────────────────────────
+ ✅ Database info display (tables, size, records)
+ ✅ Export SQL backup (download .sql file)
+
+─── SETTINGS — ACCOUNTS (Super Admin) ────────────────────────────────────────
+ ✅ Add admin account (name, email, password)
+ ✅ View admin list
+ ✅ Edit admin account
+ ✅ Delete/Archive admin (NOW soft delete → Archives, restorable)
+
+─── SETTINGS — AUDIT TRAIL (Super Admin) ─────────────────────────────────────
+ ✅ View all system activity logs (CREATE, UPDATE, DELETE, etc.)
+ ✅ Today's activity count
+ ✅ Action breakdown stats (creates, updates, deletes)
+ ✅ Search, filter by module/action, date filter
+
+─── SETTINGS — ARCHIVES (Super Admin) ────────────────────────────────────────
+ ✅ View all soft-deleted records across ALL modules
+ ✅ Module filter tabs
+ ✅ Restore archived record (returns to original module as active)
+ ✅ View archived record details (module-specific detail view)
+ ✅ Statistics cards (total archived, modules affected, most recent)
+ ✅ Users module now included (staff/admin archives visible)
+ ❌ Permanent Delete button REMOVED (by design — no hard deletes)
+
+===============================================================================
+6. KNOWN ISSUES / NOTES (Updated March 2026)
+===============================================================================
+
+1. DRYING — POSTPONE ACTION
+   The backend has a POST /drying-processes/{id}/postpone route but the
+   frontend DryingProcess.jsx does not seem to expose a visible "Postpone"
+   button in the UI. The backend logic exists and works; it's just not
+   triggered from the frontend action buttons currently. Low priority —
+   status can be managed via other actions.
+
+2. CATEGORIES.JSX — ORPHANED FILE
+   File exists at pages/admin/Products/Categories.jsx but has NO route
+   in App.jsx. It duplicates Varieties functionality (uses same /varieties
+   API). Can be safely deleted if not needed.
+
+3. MOBILE BOTTOM NAV — MISSING PAGES
+   The BottomNav (mobile navigation) includes Dashboard, Procurement,
+   Processing, Products, POS, Partners, Staff, Sales, Settings but does
+   NOT include Drying and Orders pages. Users must use the sidebar or
+   navigate directly on mobile.
+
+4. SALES — NO DELETE ACTION
+   Sales use status-based lifecycle (completed → voided / returned) rather
+   than soft delete. This is by design — all sales records are always
+   preserved as transaction history. Voided sales cannot be "restored" 
+   through Archives; voided status is permanent.
+
+5. PRODUCT SOFT DELETE — CUSTOM IMPLEMENTATION
+   Product uses is_deleted boolean instead of Laravel's SoftDeletes trait.
+   This works correctly with custom global scope and Archive integration,
+   but differs from all other models which use the standard trait.
+
+6. DRYING BATCH PROCUREMENTS — PIVOT RECORDS
+   When a DryingProcess is archived, its DryingBatchProcurement pivot
+   records are hard-deleted before the parent is soft-deleted. If the
+   DryingProcess is later restored from Archives, these pivot rows will
+   NOT be restored. The drying process record itself is fine, but the
+   batch procurement associations are lost.
+
+7. FOOTER QUICK LINKS — ROLE-BASED (Fixed March 2026)
+   Footer.jsx now uses useAuth() for role-aware quick links:
+   - Staff: Links to /staff/pos, /staff/profile
+   - Admin/SuperAdmin: Links to {basePath}/products, /pos, /orders,
+     /procurement, /sales
+   - Public layout has separate footer with /about, /products, /contact
+
+8. PUBLIC PRODUCT CARDS — FIELD MAPPING (Fixed March 2026)
+   Product normalizers in Home.jsx and Products.jsx now correctly map
+   API fields: product_name→name, variety_name→variety tags,
+   weight_formatted→description, is_in_stock→inStock.
+
+===============================================================================
+                          END OF AUDIT REPORT
+===============================================================================

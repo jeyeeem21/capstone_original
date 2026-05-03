@@ -1,0 +1,242 @@
+================================================================================
+  KJP RICEMILL — ERASER.IO ARCHITECTURE DIAGRAM CODE
+  Copy-paste this into Eraser.io (Code Editor tab)
+  
+  HOW TO USE:
+  1. Go to app.eraser.io
+  2. Click "Canvas" or "Both" view
+  3. Click "Code Editor" tab (top of canvas)
+  4. Delete everything, paste code below
+  5. Diagram auto-renders on left
+================================================================================
+
+
+=== PASTE FROM HERE ===
+
+
+// KJP RICEMILL - SYSTEM ARCHITECTURE DIAGRAM
+
+// USERS
+Users [color: orange] {
+  Super Admin [icon: shield]
+  Admin [icon: user]
+  Secretary [icon: user]
+  Driver [icon: truck]
+  Customer [icon: user]
+}
+
+Public Visitor [icon: eye]
+Web Browser [icon: globe]
+
+// SECURITY LAYER
+Security Layer [color: red] {
+  User Authentication [icon: key]
+  Two-Factor Authentication [icon: lock]
+  Role-Based Access Control [icon: shield]
+  Activity Logging [icon: file-text]
+}
+
+// APPLICATION SERVER
+Application Server [color: blue] {
+
+  // CORE MODULES
+  Core Modules [color: green] {
+
+    // PROCUREMENT WORKFLOW
+    Procurement Workflow [color: red] {
+      Supplier Management [icon: users]
+      Procurement [icon: shopping-cart]
+      Drying Records [icon: sun]
+      Milling Processing [icon: settings]
+    }
+
+    Stock Distribution [icon: git-merge]
+    Inventory Management [icon: package]
+    Variety Management [icon: layers]
+    Point-of-Sale [icon: monitor]
+    Order Management [icon: shopping-bag]
+    Sales Analytics [icon: bar-chart-2]
+    Staff Management [icon: user-plus]
+    Customer Management [icon: user-check]
+    Delivery Management [icon: truck]
+  }
+
+  // ANALYTICS
+  Dashboards [icon: layout]
+  Predictive Analysis [icon: trending-up]
+
+  // SUPER ADMIN EXCLUSIVE
+  Super Admin Modules [color: purple] {
+    Audit Trail [icon: file-text]
+    Archives Management [icon: archive]
+    Business Settings [icon: settings]
+    Appearance Theme [icon: edit]
+    Website CMS [icon: edit-3]
+    Database Backup [icon: database]
+    Admin Account Mgmt [icon: user-plus]
+  }
+}
+
+// PUBLIC WEBSITE
+Public Website [color: gray] {
+  Landing Page [icon: home]
+  About Page [icon: info]
+  Product Catalog [icon: grid]
+  Contact Page [icon: mail]
+}
+
+// EXTERNAL SERVICES
+MySQL Database [icon: database]
+Cash Payment [icon: dollar-sign]
+GCash Payment [icon: smartphone]
+COD Payment [icon: credit-card]
+Email SMTP [icon: mail]
+Notifications [icon: bell]
+
+// USER ACCESS
+Super Admin > Web Browser
+Admin > Web Browser
+Secretary > Web Browser
+Driver > Web Browser
+Customer > Web Browser: browse and order
+Public Visitor > Web Browser: view only
+
+// AUTH FLOW
+Web Browser > User Authentication: login credentials
+User Authentication > Two-Factor Authentication: admin roles only
+Two-Factor Authentication > Role-Based Access Control: verify TOTP
+Role-Based Access Control > Activity Logging: log actions
+Activity Logging > Core Modules: grant access
+
+// PUBLIC ACCESS
+Public Visitor > Public Website: no auth
+Customer > Public Website: browse products
+
+// PROCUREMENT FLOW
+Supplier Management > Procurement: supply raw palay
+Procurement > Drying Records: receive palay
+Drying Records > Milling Processing: dried palay
+Milling Processing > Stock Distribution: finished rice
+Stock Distribution > Inventory Management: update levels and cost tracing
+Variety Management > Inventory Management: categorize
+
+// SALES FLOW
+Point-of-Sale > Inventory Management: deduct stock
+Order Management > Inventory Management: deduct stock
+Point-of-Sale > Cash Payment: process payment
+Point-of-Sale > GCash Payment: process payment
+Order Management > GCash Payment: process payment
+Order Management > COD Payment: collect on delivery
+Sales Analytics > Dashboards: revenue and trends
+
+// DELIVERY FLOW
+Order Management > Delivery Management: sync status
+Delivery Management > Order Management: update status
+Driver > Delivery Management: update delivery
+Delivery Management > Customer: proof of delivery
+
+// ANALYTICS AND ML
+Dashboards > MySQL Database: retrieve historical data
+MySQL Database > Predictive Analysis: train regression model
+Predictive Analysis > Dashboards: display forecasts
+Sales Analytics > MySQL Database: query sales data
+
+// CUSTOMER FLOW
+Customer > Order Management: place orders
+Customer > Point-of-Sale: walk-in purchase
+Order Management > Customer: order status updates
+Customer Management > Customer: manage account
+
+// NOTIFICATIONS AND EMAIL
+Order Management > Notifications: trigger alerts
+Delivery Management > Notifications: delivery updates
+Notifications > Email SMTP: send emails
+Notifications > Customer: order updates
+Email SMTP > Customer: verification and receipts
+Staff Management > Email SMTP: staff verification
+Customer Management > Email SMTP: customer verification
+
+// SUPER ADMIN EXCLUSIVE
+Activity Logging > Audit Trail: log all CRUD
+Inventory Management > Archives Management: soft-deleted records
+Business Settings > Application Server: configure system
+Appearance Theme > Application Server: theme colors
+Website CMS > Public Website: manage content
+Database Backup > MySQL Database: export SQL and CSV
+Admin Account Mgmt > Staff Management: manage admins
+
+// DATABASE
+Application Server > MySQL Database: read and write
+Inventory Management > MySQL Database: stock logs
+
+
+=== END OF CODE ===
+
+
+================================================================================
+  NOTES ON SYNTAX (matching Eraser.io format)
+================================================================================
+
+SYNTAX RULES USED:
+  Node [icon: name]              → node with icon
+  Node [icon: name, color: red]  → node with icon and color
+  Group [color: green] { ... }   → group container
+  A > B                          → arrow from A to B
+  A > B: label                   → arrow with label text
+  A > B, C, D                    → one node to many
+  A < B                          → reverse arrow
+  // comment                     → comment line (ignored)
+
+FIXED FROM PREVIOUS VERSION:
+  ✗ style: dashed    → removed (not valid Eraser syntax)
+  ✗ icon: user-shield → changed to icon: shield
+  ✗ icon: user-cog   → changed to icon: user
+  ✗ icon: shield-check → changed to icon: lock
+  ✗ icon: clipboard-list → changed to icon: file-text
+  ✗ icon: palette    → changed to icon: edit
+  ✗ A <> B           → changed to A > B and B > A (two arrows)
+  ✗ icon: activity   → removed (not valid)
+
+
+================================================================================
+  WHAT EACH COLOR/SECTION REPRESENTS
+================================================================================
+
+  🟠 Orange  = Users (Super Admin, Admin, Secretary, Driver)
+  🔴 Red     = Security Layer (Auth, 2FA, RBAC, Logging)
+  🟢 Green   = Core Modules (main business features)
+  🔴 Red     = Procurement Workflow (supply chain inside Core)
+  🟣 Purple  = Super Admin Exclusive (restricted features)
+  ⚫ Gray    = Public Website (no auth needed)
+  🔵 Blue    = Application Server (main container)
+
+
+================================================================================
+  FLOW DESCRIPTIONS
+================================================================================
+
+1. USER ACCESS FLOW:
+   User → Web Browser → Auth → 2FA (admin only) → RBAC → System
+
+2. PROCUREMENT-TO-SALE PIPELINE:
+   Supplier → Procurement → Drying → Milling → Stock Distribution
+   → Inventory → POS/Orders → Payment
+
+3. ORDER LIFECYCLE:
+   Pending → Processing → Shipped → Delivered (or Voided)
+   Delivered → Return Requested → Picking Up → Returned
+
+4. DELIVERY FLOW:
+   Order Mgmt → Delivery Mgmt ← Driver updates
+   Pending → In Transit → Delivered/Failed
+
+5. COST TRACING FLOW:
+   Procurement Cost + Drying Cost → Processing → Stock Distribution
+   → Cost Per Unit → Profit Margin → Dashboard Analytics
+
+6. ADMIN VS SUPER ADMIN:
+   Admin: Core Modules (green) only
+   Super Admin: Core Modules (green) + Super Admin Modules (purple)
+
+7. SECURITY CHAIN:
+   Request → Token Check → 2FA (if admin) → Role Check → Audit Log → Access

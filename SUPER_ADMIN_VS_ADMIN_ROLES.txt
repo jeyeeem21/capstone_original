@@ -1,0 +1,243 @@
+====================================================================
+       KJP RICEMILL — SUPER ADMIN vs ADMIN ROLE REFERENCE
+             (IMPLEMENTED — All features below are live)
+====================================================================
+
+--------------------------------------------------------------------
+1. SUPER ADMIN (Owner / Business Owner)
+--------------------------------------------------------------------
+   - Only 1 account (or very limited, e.g., owner + co-owner)
+   - Has FULL unrestricted access to everything
+
+   ACCESS & PERMISSIONS:
+   [x] Dashboard (full analytics, all data)
+   [x] Procurement (create, edit, delete, approve)
+   [x] Drying & Processing (full control)
+   [x] Products / Varieties / Inventory (full CRUD)
+   [x] Point of Sale (access)
+   [x] Orders (manage, cancel, process returns)
+   [x] Sales (view all, void transactions)
+   [x] Partners - Suppliers & Customers (full CRUD)
+   [x] Staff Management — can create/edit/archive/delete ALL users
+        including Admins, Staff, Drivers
+   [x] Audit Trail — full view of all system activity logs
+   [x] Settings:
+        - Business Settings (name, logo, address, contact)
+        - Appearance Settings (theme colors, dark mode)
+        - Account Management (manage all user accounts)
+        - System Configuration (backup, maintenance)
+         -All archive data
+
+   EXCLUSIVE TO SUPER ADMIN:
+   * Create / deactivate Admin accounts
+   * Change business settings (name, logo, etc.)
+   * Change appearance/theme settings
+   * View & export audit trail logs
+   * Void/reverse completed sales
+   * Delete records permanently
+   * Access system backup & maintenance tools
+
+--------------------------------------------------------------------
+2. ADMIN (Manager / Trusted Employee)
+--------------------------------------------------------------------
+   - Can be multiple accounts (e.g., shift managers)
+   - Has operational access but NOT system-level control
+
+   ACCESS & PERMISSIONS:
+   [x] Dashboard (operational analytics)
+   [x] Procurement (create, edit — archive)
+   [x] Drying & Processing (manage operations)
+   [x] Products / Varieties / Inventory (add, edit — archive)
+   [x] Point of Sale (access)
+   [x] Orders (manage, update status, process returns)
+   [x] Sales (view, create — NO void)
+   [x] Partners - Suppliers & Customers (add, edit — archive)
+   [x] Staff Management — can manage Staff & Drivers only
+        (CANNOT create/edit other Admins)
+   [ ] Audit Trail — NO access (or view-only)
+   [ ] Settings — NO access to business/appearance settings
+        (can only edit own profile)
+
+   RESTRICTED FROM:
+   * Cannot create/edit/delete Admin or Super Admin accounts
+   * Cannot change business settings
+   * Cannot change appearance/theme
+   * Cannot void completed sales
+   * Cannot permanently delete records
+   * Cannot access audit trail (optional: view-only)
+   * Cannot access system backup tools
+
+--------------------------------------------------------------------
+3. COMPARISON TABLE
+--------------------------------------------------------------------
+
+  FEATURE                        SUPER ADMIN     ADMIN
+  ─────────────────────────────  ───────────     ─────
+  Dashboard                      Full            Full
+  Procurement (CRUD)             Full            Create/Edit only
+  Drying / Processing            Full            Full
+  Products & Inventory           Full            Add/Edit only
+  POS                            Full            Full
+  Orders & Returns               Full            Full
+  Sales Management               Full + Void     View/Create only
+  Suppliers & Customers          Full            Add/Edit only
+  Staff Management               All roles       Staff/Driver only
+  Audit Trail                    Full            No access
+  Business Settings              Full            No access
+  Appearance Settings            Full            No access
+  Delete Records                 Yes             No
+  Void Sales                     Yes             No
+  System Backup                  Yes             No
+
+--------------------------------------------------------------------
+4. QUESTIONS FOR YOU TO DECIDE
+--------------------------------------------------------------------
+
+  Q1: Should Admin have READ-ONLY access to Audit Trail?
+      Or completely hidden from sidebar? 
+      -hide from admin
+
+  Q2: Should Admin be able to delete anything at all?
+      (e.g., cancel pending orders is OK, but delete records?)
+      -no
+  Q3: Do you want a "Deactivate" feature instead of delete
+      for user accounts? (Soft delete — can reactivate later)
+      -yes
+
+  Q4: Should Settings page for Admin show only their own
+      profile settings? Or completely hidden? show their own profile settings
+
+  Q5: How many Super Admin accounts max? Just 1 (the owner)?
+      Or allow 2-3 (owner + partner)? 
+      -how many is ideal? how about super admin how many of it? so super admin can create another super admin account? what is safe
+
+  Q6: Should we add an "Activity Log" so Super Admin can see
+      what each Admin did? (e.g., "Admin John created Order #005")  hmm yes? hindi ba ito sa audit logs na rin?
+     
+
+     i have questions pa, so this pages in admin is the pages both for admin and super admin right? now we need to implement na ng backend for authentication? 
+     if yes we will do it na then make sure if it is mobile and desktop there is cookies and token right? w
+--------------------------------------------------------------------
+5. IMPLEMENTATION STATUS (ALL COMPLETED)
+--------------------------------------------------------------------
+
+  Step 1: ✅ 'role' field in users table
+          → 'super_admin', 'admin', 'staff', 'driver', 'client'
+
+  Step 2: ✅ EnsureUserHasRole middleware created
+          → Registered as 'role:' alias in bootstrap/app.php
+
+  Step 3: ✅ Sidebar shows/hides items based on role
+          → isSuperAdmin() conditionals for Audit Trail, Archives
+
+  Step 4: ✅ API routes protected with role middleware
+          → super_admin-only routes: archives, audit-trails,
+            appearance, business-settings, website-content, database
+
+  Step 5: ✅ Frontend components with conditional rendering
+          → Delete/Archive buttons, Settings tabs, void actions
+
+  Step 6: ✅ Default Super Admin account seeded
+
+  ADDITIONAL ROLES IMPLEMENTED:
+  → Staff: POS access + staff dashboard (/staff/*)
+  → Client: Shop, orders, cart, profile (/client/*)
+  → Driver: Deliveries, profile (/driver/*)
+  → Each role has its own layout, sidebar, and route group
+
+====================================================================
+       ANSWERS TO YOUR QUESTIONS
+====================================================================
+
+  YOUR Q5 FOLLOW-UP: "How many Super Admin is ideal? Can Super
+  Admin create another Super Admin? What is safe?"
+
+  ANSWER:
+  - Ideally just 1 Super Admin (the business owner). This is
+    the safest approach — only ONE account with full power.
+  - If you need a backup (e.g., co-owner or spouse), max 2.
+  - Super Admin should NOT be able to create another Super Admin
+    from the UI. The 2nd one should only be seeded in the
+    database or created via artisan command. This prevents
+    privilege escalation — an admin who somehow gets Super Admin
+    access can't multiply it.
+  - RECOMMENDED: 1 Super Admin only. If owner loses access,
+    recover via database directly (more secure).
+
+  YOUR Q6 FOLLOW-UP: "Hindi ba ito sa Audit Logs na rin?"
+
+  ANSWER:
+  - YES, Activity Log = Audit Trail. They are the same thing.
+    The Audit Trail page you already have IS where all actions
+    will be logged (who did what, when). We just need to make
+    it record real data once authentication is in place.
+    No need for a separate page.
+
+  YOUR QUESTION: "So these admin pages are for both Admin and
+  Super Admin right?"
+
+  ANSWER:
+  - YES, same pages. The difference is just what buttons/actions
+    are visible:
+    • Super Admin sees: Archive, Restore, Permanent Delete,
+      Void Sales, Settings (full), Staff Management (all roles),
+      Audit Trail
+    • Admin sees: Archive only (no delete), no Void, own profile
+      settings only, Staff/Driver management only, no Audit Trail
+
+  YOUR QUESTION: "We need to implement backend authentication?
+  With cookies and tokens for mobile and desktop?"
+
+  ANSWER:
+  - YES, we will implement full auth. Here's the plan:
+    • Laravel Sanctum for API token authentication
+    • SPA mode (cookie-based) for desktop web browser
+    • Token mode for mobile (if you plan a mobile app later)
+    • Login page → get token/cookie → store in httpOnly cookie
+    • Every API request includes the cookie/token
+    • Role checked on both backend (middleware) and frontend
+      (conditional rendering)
+  - We will implement this AFTER we finalize the archive/soft
+    delete system and role structure. Auth is the next big step.
+
+====================================================================
+       ARCHIVE SYSTEM — FINALIZED PLAN
+====================================================================
+
+  Based on your decisions, here's what we'll implement:
+
+  1. ADMIN "DELETE" → becomes "ARCHIVE"
+     - All delete buttons in admin pages change to "Archive"
+     - Archived records get a `deleted_at` timestamp (soft delete)
+     - They disappear from the main lists but stay in the DB
+     - Admin can archive: Procurement, Products, Varieties,
+       Suppliers, Customers, Staff, etc.
+
+  2. SUPER ADMIN SEES "ARCHIVES" PAGE/TAB
+     - Super Admin gets an "Archives" section (sidebar or tab)
+     - Shows all archived records across all modules
+     - Can RESTORE (undo archive → record comes back)
+     - Can PERMANENTLY DELETE (hard delete from DB) — but we'll
+       actually keep it as soft delete with a `permanently_deleted`
+       flag or just keep the soft delete. The record stays in DB
+       with `deleted_at` set, just hidden from everything.
+     - So "permanently delete" = stays in DB but is permanently
+       hidden (not restorable from UI anymore). Only accessible
+       via direct database query.
+
+  3. FLOW:
+     Admin archives a record
+       → Record gets `deleted_at` = now()
+       → Disappears from admin's view
+       → Appears in Super Admin's Archives
+
+     Super Admin restores
+       → `deleted_at` = null
+       → Record reappears in normal lists
+
+     Super Admin "permanently deletes"
+       → We keep it soft deleted in DB (as you requested)
+       → But it's marked so it won't show even in Archives
+       → Still exists in database for audit/compliance
+
+====================================================================

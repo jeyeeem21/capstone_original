@@ -1,0 +1,1260 @@
+================================================================
+  KJP RICEMILL — BATCH SYSTEM DESIGN PLAN
+  Scan Date: February 22, 2026
+  Status: ✅ FULLY IMPLEMENTED (All flows A–D working)
+================================================================
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 1: WHAT EXISTS RIGHT NOW (Current System Scan)
+════════════════════════════════════════════════════════════════
+
+── PROCUREMENT ─────────────────────────────────────────────────
+
+  Table: procurements
+  Columns: id, supplier_id, variety_id, quantity_kg, sacks,
+           price_per_kg, total_cost, description, status,
+           created_at, updated_at, deleted_at
+
+  Status values: Pending → Drying → Dried → Completed | Cancelled
+  Relationships:
+    - belongs to: Supplier, Variety
+    - has many:   DryingProcess
+
+  Current behavior:
+    - One procurement = one supplier, one variety, one delivery
+    - No batch concept. Each row is fully independent.
+    - No date grouping. No harvest-season grouping.
+
+
+── DRYING PROCESS ──────────────────────────────────────────────
+
+  Table: drying_processes
+  Columns: id, procurement_id, quantity_kg, sacks, quantity_out,
+           days, price (per sack per day), total_price, status,
+           created_at, updated_at, deleted_at
+
+  Status values: Drying → Dried | Cancelled
+  Relationships:
+    - belongs to: Procurement
+    - has many:   Processing  (via drying_process_id added by migration)
+
+  Current behavior:
+    - One drying record = one procurement only (1-to-1 FK)
+    - quantity_out accumulates as processing records consume it
+    - Cannot currently merge multiple procurements into one drying batch
+
+
+── PROCESSING ──────────────────────────────────────────────────
+
+  Table: processings
+  Columns: id, procurement_id, drying_process_id, input_kg,
+           output_kg, stock_out, husk_kg, yield_percent,
+           operator_name, status, processing_date,
+           completed_date, created_at, updated_at, deleted_at
+
+  Status values: Pending → Processing → Completed
+  Stock status (appended): Pending | Partial | Distributed
+  Relationships:
+    - belongs to: Procurement, DryingProcess
+
+  Current behavior:
+    - A processing can come directly from a procurement (drying skipped)
+      OR from a drying process record
+    - drying.quantity_out is incremented when processing is created
+    - output_kg feeds into product stock (indirectly via stock_out)
+
+
+── PRODUCT ─────────────────────────────────────────────────────
+
+  Table: products
+  Columns: id, category_id (→ varieties.id), name, description,
+           price, stock, unit, status, is_featured,
+           created_at, updated_at, deleted_at
+
+  Relationships:
+    - belongs to: Variety (via category_id column)
+
+  Current behavior:
+    - Products are independent (manually managed stock)
+    - Processing's stock_out doesn't automatically push to product stock
+    - Variety links product to the rice variety type
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 2: THE REAL-WORLD PROBLEM (Your Explanation)
+════════════════════════════════════════════════════════════════
+
+  SCENARIO A — Single Supplier (Clean / 1-to-1 flow)
+  ─────────────────────────────────────────────────────
+  Supplier gives 500 sacks / 8,000 kg of IR64.
+  You process it alone, no mixing with others.
+
+  Flow works perfectly today:
+    Procurement #001 (IR64, Supplier A, 500 sacks)
+      → Drying #001 (500 sacks)
+        → Processing #001 (input 8,000 kg → output X kg)
+
+  ✅ No problem here. It's 1-to-1 all the way.
+
+
+  SCENARIO B — Multiple Suppliers, Same Variety (The Problem)
+  ────────────────────────────────────────────────────────────
+  Harvest season: many suppliers come at the same time.
+  All bring IR64. All palay goes into the same storage bin/bay.
+
+  Now you can't track which kg came from which supplier.
+  When you sell, you just scoop from the IR64 bin.
+  You price it as IR64, not by individual supplier.
+
+  ❌ Current system can't represent this.
+     You'd have to pick ONE procurement per drying, per processing.
+     The "merged bin" reality isn't modeled.
+
+
+  SCENARIO C — Batch Concept (Your Solution)
+  ────────────────────────────────────────────
+  You want to group procurements into a BATCH.
+  Batch = same variety + same season/date window.
+
+  Example:
+    Batch 1 → IR64 (Harvest Season Feb 2026)
+      - Procurement #001: Supplier A, 500 sacks
+      - Procurement #002: Supplier B, 300 sacks
+      - Procurement #003: Supplier C, 200 sacks
+      Total: 1,000 sacks of IR64 all in same bin
+
+    Batch 2 → Sinandomeng (Harvest Season Feb 2026)
+      - Procurement #004: Supplier D, 400 sacks
+
+  Then you can:
+    - Send Batch 1 as a whole to Drying
+    - OR still send individual Procurement #001 to Drying separately
+    - Process Batch 1 as a whole
+    - OR still process individual Drying record separately
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 3: PROPOSED DESIGN
+════════════════════════════════════════════════════════════════
+
+  ── CORE CONCEPT ────────────────────────────────────────────
+
+  Add a new "Batch" layer that sits ABOVE Procurement.
+  Procurement stays exactly as it is (per-supplier, per-delivery).
+  A Batch optionally groups multiple Procurements together.
+
+  This keeps the 1-to-1 flow intact for Scenario A.
+  And enables the merged-bin flow for Scenario B.
+
+
+  ── NEW TABLE: procurement_batches ──────────────────────────
+
+  id
+  batch_number       → auto-generated: BATCH-YYYYMMDD-001
+                       e.g. BATCH-20260222-001 (date + daily seq)
+  variety_id         → FK to varieties (all items in batch = same variety)
+  season_date        → date field, defaults to today (no free-text name)
+  total_sacks        → denormalized SUM, updated when procurement joins/leaves
+  total_kg           → denormalized SUM, updated when procurement joins/leaves
+  remaining_sacks    → decremented each time drying draws from this batch
+  remaining_kg       → decremented each time drying draws from this batch
+  status             → Open | Closed | Completed
+  notes              → nullable text
+  created_at, updated_at, deleted_at
+
+  ⚡ SPEED NOTE: total_sacks, total_kg, remaining_sacks, remaining_kg are
+  stored directly on the row (denormalized). No SUM() query needed at
+  display time. Fast O(1) reads for the batch list page.
+
+
+  ── CHANGE TO: procurements ────────────────────────────────
+
+  Add column:
+    batch_id   → nullable FK to procurement_batches
+                 NULL = standalone procurement (Scenario A, no batch needed)
+                 SET  = this procurement belongs to a batch (Scenario B)
+
+  Rules:
+    - A procurement can only belong to ONE batch
+    - All procurements in a batch must share the same variety_id
+    - ★ CRITICAL: A procurement that belongs to a batch can STILL be
+      used individually by its own procurement_id for drying.
+      Being in a batch does NOT lock it from individual use.
+      The batch is just a grouping/organizational layer.
+    - A procurement can be MOVED to another batch while that batch
+      is still "Open". Once the batch is "Closed" the assignment is locked.
+
+
+  ── DRYING: Two entry modes ────────────────────────────────
+
+  Current: drying_processes.procurement_id → one procurement only
+
+  Proposed: keep procurement_id for single-procurement drying
+  Add:       batch_id (nullable FK) for batch drying
+
+  BOTH MODES CAN COEXIST:
+    - You can dry a single procurement_id even if that procurement
+      belongs to a batch. Its own sacks and kg data are used directly.
+    - You can dry from a batch (batch_id set), in which case:
+        • You choose HOW MANY SACKS to send to drying (partial or full).
+        • Drying price is per sack (confirmed).
+        • The kg is calculated from those sacks.
+        • That amount is SUBTRACTED from the batch's remaining sacks/kg.
+        • You do NOT need to dry all sacks at once — space may be limited.
+        • Multiple drying records can draw from the same batch over time.
+
+  Rule:  exactly ONE of (procurement_id, batch_id) must be set per record.
+         You cannot set both on the same drying record.
+
+  New pivot table: drying_batch_procurements
+    id
+    drying_process_id  → FK to drying_processes
+    procurement_id     → FK to procurements
+    sacks_taken        → how many sacks from this procurement in this drying
+    quantity_kg        → the kg equivalent of those sacks
+
+  This pivot enables full traceability: for any batch drying record
+  you can see exactly which supplier's palay is inside, and how much.
+
+
+  ── PROCESSING: Two entry modes ────────────────────────────
+
+  Same approach. Processing can come from:
+    - A single drying record (current behavior, unchanged)
+    - A batch drying record
+
+  No schema change needed here — once drying is resolved,
+  processing just picks up from drying as it does today.
+
+
+  ── SUMMARY OF NEW/CHANGED DB OBJECTS ──────────────────────
+
+  NEW TABLE:
+    procurement_batches
+      id, batch_number, variety_id, name, season_date,
+      total_sacks, total_kg, remaining_sacks, remaining_kg,
+      status, notes, created_at, updated_at, deleted_at
+
+      NOTE: remaining_sacks / remaining_kg are decremented each time
+      a batch drying record draws from this batch. This lets the UI
+      show "how much of this batch is still uncooked".
+
+  MODIFIED TABLE:
+    procurements
+      + batch_id (nullable FK → procurement_batches, nullOnDelete)
+
+  MODIFIED TABLE:
+    drying_processes
+      + batch_id (nullable FK → procurement_batches, nullOnDelete)
+      (procurement_id and batch_id are mutually exclusive per row)
+
+  NEW PIVOT TABLE (for batch drying traceability):
+    drying_batch_procurements
+      id, drying_process_id, procurement_id,
+      sacks_taken, quantity_kg
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 4: FLOW DIAGRAMS
+════════════════════════════════════════════════════════════════
+
+  FLOW A — Standalone, No Batch (unchanged from today)
+  ──────────────────────────────────────────────────────
+  Supplier delivers
+      ↓
+  Procurement #001 (batch_id = NULL)
+      ↓
+  Drying #001  (procurement_id = #001, batch_id = NULL)
+      ↓
+  Processing #001  (drying_process_id = #001)
+      ↓
+  Product/Stock
+
+
+  FLOW B — Full Batch Drying (new)
+  ──────────────────────────────────────────────────────
+  Multiple suppliers deliver IR64 same week
+      ↓
+  Create Batch #001 (IR64, Feb 22 2026)
+  [batch_number auto = BATCH-2026-001]
+      ↓
+  Procurement #002 (batch_id = #001, Supplier A, 500 sacks, 8,000 kg)
+  Procurement #003 (batch_id = #001, Supplier B, 300 sacks, 4,800 kg)
+  Procurement #004 (batch_id = #001, Supplier C, 200 sacks, 3,200 kg)
+      ↓
+  Batch totals: 1,000 sacks, 16,000 kg remaining_sacks=1000 remaining_kg=16000
+      ↓
+  Drying #002  (batch_id=#001, sacks=1000, kg=16000, price per sack)
+      [drying_batch_procurements: #002→Proc#002 500sacks, →Proc#003 300sacks, →Proc#004 200sacks]
+      [batch remaining_sacks = 0, remaining_kg = 0]
+      ↓
+  Processing #002  (drying_process_id = #002, input 16,000 kg)
+      ↓
+  Product/Stock (IR64 rice)
+
+
+  FLOW C — Partial Batch Drying + KG TRACKING
+  ──────────────────────────────────────────────────────
+  Batch #001 has 1,000 sacks:
+    Proc #002: Supplier A, 500 sacks, 8,000 kg  → 16 kg/sack
+    Proc #003: Supplier B, 300 sacks, 4,800 kg  → 16 kg/sack
+    Proc #004: Supplier C, 200 sacks, 3,200 kg  → 16 kg/sack
+  Dryer only fits 400 sacks today.
+      ↓
+  Owner enters: "400 sacks from Batch #001"
+  System distributes PROPORTIONALLY:
+    Proc #002 share: 400 × (500/1000) = 200 sacks → 200×16 = 3,200 kg
+    Proc #003 share: 400 × (300/1000) = 120 sacks → 120×16 = 1,920 kg
+    Proc #004 share: 400 × (200/1000) =  80 sacks →  80×16 = 1,280 kg
+    Total kg this drying = 6,400 kg ✅
+
+  drying_batch_procurements records created:
+    { drying_id=3, proc_id=2, sacks_taken=200, quantity_kg=3200 }
+    { drying_id=3, proc_id=3, sacks_taken=120, quantity_kg=1920 }
+    { drying_id=3, proc_id=4, sacks_taken=80,  quantity_kg=1280 }
+
+  Batch #001 updated: remaining_sacks=600, remaining_kg=9,600
+      ↓
+  Later: Drying #004 (batch_id=#001, sacks=600, kg=9,600) — same logic
+      [batch remaining_sacks = 0, remaining_kg = 0 → auto-Closed]
+
+  ★ DIFFERENT kg/sack ratios work the same way:
+    If Proc A=16kg/sack, Proc B=14kg/sack, Proc C=18kg/sack
+    → each procurement's own ratio is used in the pivot record kg calc
+    → total kg = sum of each proc's proportional contribution
+
+
+  FLOW D — Procurement in Batch, Used Individually
+  ──────────────────────────────────────────────────
+  Procurement #003 (batch_id=#001, Supplier B) — different palay quality
+  Owner decides to dry it separately, not as part of the batch.
+      ↓
+  Drying #005  (procurement_id = #003, batch_id = NULL)
+      [This uses Procurement #003's own sacks/kg data directly]
+      [batch remaining_sacks must account for this — subtract #003's sacks]
+      ↓
+  Processing #003  (drying_process_id = #005)
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 5: UI/UX PLAN
+════════════════════════════════════════════════════════════════
+
+  ── PROCUREMENT PAGE (updated) ─────────────────────────────
+
+  View modes:
+    [All] [By Batch] [Standalone]
+
+  "By Batch" view shows a grouped/collapsible table:
+    ▼ BATCH-2026-001 — IR64 | Feb 22 2026 | 1,000 sacks | 600 remaining | Open
+       #002 Supplier A   500 sacks   ₱8.50/kg
+       #003 Supplier B   300 sacks   ₱8.00/kg
+       #004 Supplier C   200 sacks   ₱7.80/kg
+        Avg price: ₱8.17/kg | Total cost: ₱130,720 | Profitability button ▶
+    ▼ BATCH-2026-002 — Sinandomeng | Feb 22 2026 | 400 sacks | Open
+       #006 Supplier D   400 sacks   ₱9.00/kg
+    ─ STANDALONE (no batch)
+       #001 Supplier E   80 sacks    ₱8.20/kg
+
+  Add Procurement modal:
+    - Toggle: "Add to Batch" / "Standalone"
+    - If "Add to Batch":
+        • Select existing Open batch OR "+ Create New Batch"
+        • If creating new: batch_number auto-generated (BATCH-2026-XXX),
+          enter batch name, select variety, enter season date (default = today)
+        • Variety auto-fills from selected batch and locks
+    - If "Standalone": variety picker open as normal
+    - Procurement already in a batch can be MOVED to another Open batch
+      or removed from batch (reverts to standalone) anytime while Open
+
+  Batch status bar (in By Batch view, per batch row):
+    Shows: Total sacks | Remaining sacks | Total kg | Total cost | Status
+    Buttons:
+      [+ Add Procurement]  → opens Add modal pre-linked to that batch
+      [Send to Drying]     → opens Drying Add modal pre-filled with batch
+      [View Profitability] → summary modal
+
+  Batch status bar (in By Batch view):
+    Shows: Total sacks | Total kg | Total cost | Status
+    Button: "Send Batch to Drying" → creates one Drying record for entire batch
+
+
+  ── DRYING PAGE (lightly updated) ──────────────────────────
+
+  Add Drying modal — two source modes:
+    [From Single Procurement]   [From Batch]
+
+  "From Single Procurement" mode:
+    - Works exactly as today.
+    - Per-procurement data (sacks, kg) used directly.
+    - Procurement can be standalone OR part of a batch — doesn't matter.
+
+  "From Batch" mode:
+    - Dropdown: select an Open or Closed batch.
+    - Shows: batch variety, total sacks, remaining sacks.
+    - Input: "How many sacks to dry?" (must be ≤ remaining_sacks).
+    - System calculates kg from those sacks automatically
+      (using avg kg/sack from the batch's member procurements).
+    - Price field: per sack (confirmed).
+    - On save: remaining_sacks and remaining_kg on the batch are decremented.
+    - If this reduces remaining_sacks to 0 → batch auto-closes.
+
+  "Send to Drying" button is ALSO available:
+    - On Procurement page (Batch view) → opens Drying Add modal pre-filled.
+    - On Drying page (Add modal) → manually trigger the same flow.
+
+  Table column "Source" shows:
+    [single]  Procurement #001 - Supplier A
+    [batch]   BATCH-2026-001 - IR64  (3 procurements, 400/1000 sacks)
+
+
+  ── PROCESSING PAGE (lightly updated) ──────────────────────
+
+  No major change. Processing always comes from a Drying record.
+  Drying record already knows if it's batch or single-source.
+  Processing just needs to display "Source: BATCH-001" when applicable.
+
+
+  ── NO SEPARATE BATCH PAGE ─────────────────────────────────
+
+  ✅ DECIDED: No separate batch management page.
+  Instead: Filter bar on Procurement page includes a "Batch" dropdown.
+  Selecting a batch filters the table to show only that batch's procurements.
+  The batch summary (totals, remaining, status) shows as a header card above
+  the filtered table rows.
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 6: THINGS TO KEEP IN MIND / CONSTRAINTS
+════════════════════════════════════════════════════════════════
+
+  1. BACKWARD COMPATIBILITY
+     All existing procurement/drying/processing records have batch_id = NULL.
+     They continue to work exactly as before. No data migration needed.
+
+  2. VARIETY CONSTRAINT ON BATCHES
+     A batch is tied to exactly one variety.
+     Procurement can only join a batch if its variety_id matches.
+     This ensures the bin represents one known variety only.
+
+  3. SACKS field in procurement
+     The sacks column was added via migration (it exists now).
+     Batch totals = SUM(sacks) and SUM(quantity_kg) from member procurements.
+     These can be computed on the fly or cached as denormalized columns.
+
+  4. PARTIAL DRYING FROM BATCH
+     Flow C shows: a procurement inside a batch can still be dried alone.
+     The system must not double-count kg if both single AND batch drying
+     exist for the same procurement. Need a "used_in_drying" flag or
+     simply track it via drying_batch_procurements pivot records.
+
+  5. STATUS FLOW FOR BATCH
+     Open   → all procurements collected, no drying yet
+     Closed → drying has started (batch locked, no more adding procurements)
+     Processing → drying done, in milling
+     Completed  → processing done, rice in stock
+
+  6. PROCUREMENT STATUS WHEN PART OF A BATCH
+     Individual procurement status still flows normally:
+     Pending → Drying → Dried → Completed
+     Even if it's in a batch, each row tracks its own status.
+
+  7. NO FORCED BATCH — IT IS OPTIONAL
+     Owner can always do standalone procurement without a batch.
+     Batch is a convenience grouping, not a requirement. //yes
+
+  8. AUTO BATCH NUMBER FORMAT
+     BATCH-{YYYYMMDD}-{3-digit-seq} e.g. BATCH-20260222-001
+     Includes the date of batch creation. Seq resets daily.
+     Format is descriptive at a glance (you see when it was created).
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 7: FILES THAT WILL NEED CHANGES
+════════════════════════════════════════════════════════════════
+
+  BACKEND (New)
+  ─────────────
+  app/Models/ProcurementBatch.php
+  app/Services/ProcurementBatchService.php
+  app/Http/Controllers/ProcurementBatchController.php
+  app/Http/Resources/ProcurementBatchResource.php
+  database/migrations/xxxx_create_procurement_batches_table.php
+  database/migrations/xxxx_add_batch_id_to_procurements.php
+  database/migrations/xxxx_add_batch_id_to_drying_processes.php
+  database/migrations/xxxx_create_drying_batch_procurements_table.php
+
+  BACKEND (Modified)
+  ──────────────────
+  app/Models/Procurement.php           (add batch() relationship)
+  app/Models/DryingProcess.php         (add batch() relationship)
+  app/Services/ProcurementService.php  (batch-aware queries)
+  app/Services/DryingProcessService.php (batch drying creation)
+  app/Http/Controllers/ProcurementController.php  (batch_id in validation)
+  app/Http/Controllers/DryingProcessController.php (batch mode in store)
+  app/Http/Resources/ProcurementResource.php  (add batch info)
+  app/Http/Resources/DryingProcessResource.php (add batch info)
+  routes/api.php                       (new batch routes)
+
+  FRONTEND (New)
+  ──────────────
+  src/pages/admin/Procurement/BatchView.jsx     (grouped table view)
+  src/pages/admin/Procurement/BatchList.jsx     (optional batch management)
+
+  FRONTEND (Modified)
+  ────────────────────
+  src/pages/admin/Procurement/Procurement.jsx  (view toggle, batch dropdown)
+  src/pages/admin/DryingProcess/DryingProcess.jsx (source toggle in Add modal)
+  src/pages/admin/Processing/Processing.jsx    (display batch source label)
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 8: FINALIZED ANSWERS TO DESIGN QUESTIONS
+════════════════════════════════════════════════════════════════
+
+  Q1. Procurement pricing in a batch?
+      ✅ Each procurement keeps its own price_per_kg.
+         Batch shows a weighted average for reference only.
+
+  Q2. Batch drying: one record for whole batch OR one per procurement?
+      ✅ BOTH are allowed:
+         - One drying record for the entire batch (or partial sacks from it).
+         - OR individual procurement drying using procurement_id directly,
+           even if that procurement belongs to a batch.
+
+  Q3. How to create a batch?
+      ✅ Option (a): Inline when adding a procurement.
+         - Batch number auto-generated (BATCH-{YEAR}-{SEQ}).
+         - User selects/enters the variety name.
+         - Season date defaults to today (editable).
+
+  Q4. Batch season field?
+      ✅ Use a date field (season_date), defaults to current date.
+         Displayed as a formatted date label in the UI.
+
+  Q5. Can a procurement be moved between batches?
+      ✅ Yes — movable while batch is "Open".
+         Locked once batch is "Closed" (drying has started).
+         This allows corrections without data loss.
+
+  Q6. Lock batch when sent to drying?
+      ✅ Yes — batch becomes "Closed" when any drying draws from it.
+         Reason: dryer space may not fit the whole batch at once,
+         so partial drying is allowed (you choose sacks, not all at once).
+         Once Closed, no new procurements can be added.
+
+  Q7. Where does "Send to Drying" button appear?
+      ✅ BOTH:
+         - On Procurement page (Batch view) per batch row.
+         - On Drying page (Add Drying modal) as source selector.
+
+  Q8. Batch Profitability summary?
+      ✅ Yes — show:
+         - Total procurement cost (sum of each procurement's total_cost)
+         - Total drying cost (sum of drying records' total_price)
+         - Total processing input kg, output kg, yield %
+         - Estimated revenue (output kg × target product price)
+         - Net profit estimate
+
+================================================================
+  STATUS: DESIGN FINALIZED ✅ — Ready to begin coding.
+
+  IMPLEMENTATION ORDER:
+    Step 1. Migrations (batches table, alter procurements + drying,
+            create pivot table)
+    Step 2. Backend Models + Relationships
+    Step 3. ProcurementBatchService + Controller + Resource
+    Step 4. Update DryingProcessService (batch drying mode)
+    Step 5. Update ProcurementController + DryingProcessController
+    Step 6. Update routes/api.php
+    Step 7. Frontend — Procurement page batch view + batch toggle
+    Step 8. Frontend — Drying page source toggle (single vs batch)
+    Step 9. Frontend — Batch profitability modal
+    Step 10. Testing + cache clearing
+================================================================
+
+
+================================================================
+  KJP RICEMILL — FULL SYSTEM AUDIT & TRACKING ANALYSIS
+  Scan Date: February 23, 2026
+================================================================
+  This section was added WITHOUT deleting anything above.
+  Purpose: Document exactly how money and products are tracked
+  (and what's missing) across the entire system.
+================================================================
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 9: MONEY TRACKING — WHAT EXISTS TODAY
+════════════════════════════════════════════════════════════════
+
+  ── STAGE 1: PROCUREMENT (Buying Palay) ───────────────────
+
+  Fields that track money:
+    price_per_kg   → decimal(12,2) — unit cost from supplier
+    total_cost     → decimal(14,2) — AUTO-CALCULATED on save
+
+  How total_cost is calculated:
+    Procurement model boot() → static::saving():
+      total_cost = quantity_kg × price_per_kg
+
+  Example:
+    Supplier A delivers 8,000 kg at ₱8.50/kg
+    total_cost = 8,000 × 8.50 = ₱68,000
+
+  ✅ This works. Money spent on raw palay is tracked per delivery.
+
+
+  ── STAGE 2: DRYING (Drying Cost) ─────────────────────────
+
+  Fields that track money:
+    price          → decimal(12,2) — cost per sack for drying
+    total_price    → decimal(14,2) — calculated by recalculateTotal()
+
+  How total_price is calculated:
+    DryingProcess::recalculateTotal():
+      total_price = (sacks × price) × days
+
+  Example:
+    400 sacks dried for 3 days at ₱5/sack/day
+    total_price = (400 × 5) × 3 = ₱6,000
+
+  ⚠️ NOTE: recalculateTotal() is NOT auto-called on save.
+     It must be called manually after updating sacks/price/days.
+
+  ✅ Drying cost is tracked, but be aware of the manual call.
+
+
+  ── STAGE 3: PROCESSING (Milling) ─────────────────────────
+
+  Fields that track money:
+    ❌ NONE — Zero financial fields
+
+  What exists:
+    input_kg, output_kg, husk_kg, yield_percent, stock_out
+    operator_name, processing_date, completed_date
+
+  What's missing:
+    - Milling fee / milling cost
+    - Labor cost
+    - Electricity / fuel cost
+    - Any cost-per-kg for milling
+
+  ❌ This is a GAP. You cannot calculate total production cost 
+     without knowing how much milling costs.
+
+  ✅ OWNER'S DECISION: Milling cost will NOT be tracked separately.
+     Instead, the admin directly sets the product selling price.
+     The admin looks at total expenses (procurement + drying) per
+     batch or standalone, then uses judgment to set a price that
+     covers milling, labor, and still makes profit.
+     
+     This means:
+       TOTAL EXPENSES per batch = Procurement total_cost + Drying total_price
+       That's it. No processing cost fields needed.
+       The admin bakes milling cost into the product price manually.
+
+     Example:
+       Procurement: ₱68,000 (8,000 kg × ₱8.50/kg)
+       Drying:      ₱6,000  (400 sacks × ₱5 × 3 days)
+       ─────────────────────────────────
+       Total Expenses: ₱74,000
+       Output after milling: 5,600 kg (70% yield)
+       Cost per kg of finished rice: ₱74,000 ÷ 5,600 = ₱13.21/kg
+       
+       Admin sees ₱13.21/kg cost → sets selling price at ₱45/kg
+       That includes milling, labor, profit — all in the admin's head.
+
+
+  ── STAGE 4: PRODUCT (Selling Rice) ───────────────────────
+
+  Fields that track money:
+    price          → decimal(10,2) — SELLING price per unit
+
+  What's missing:
+    - No link back to which processing record produced it
+
+  ✅ CLARIFICATION on "cannot calculate profit per product":
+     This just meant the system doesn't automatically know the 
+     production cost. But since you (the admin) manually set the 
+     product price AFTER looking at your batch expenses, you already
+     factor in your costs mentally.
+
+     What the system CAN do for you:
+       - Show total expenses per batch (procurement + drying)
+       - Show cost-per-kg after milling (total expenses ÷ output_kg)
+       - You set the product selling price accordingly
+       - Once Sales module exists → track revenue (price × qty sold)
+       - Profit = Total Revenue - Total Expenses ← this is the goal
+
+
+  ── STAGE 5: SALES / ORDERS ──────────────────────────────
+
+  ❌ DOES NOT EXIST IN BACKEND
+
+  Current state:
+    - Sales.jsx frontend page exists but uses HARDCODED dummy data
+    - No Sale/Order model, migration, controller, or service
+    - api/config.js defines /orders and /sales endpoints but
+      NO backend routes handle them
+    - Dashboard uses HARDCODED fake chart data and recentSales array
+
+  What this means:
+    - You have NO record of actual sales transactions
+    - You cannot track WHO bought WHAT, WHEN, or HOW MUCH
+    - Revenue is completely untracked
+    - Profit/Loss cannot be calculated yet
+
+  ✅ ANSWER: "How do I calculate profit based on what I have?"
+     
+     Right now you can only see EXPENSES (money going out):
+       Total Expenses = SUM(procurement total_cost) + SUM(drying total_price)
+     
+     To calculate PROFIT you need REVENUE (money coming in):
+       Revenue = quantity_sold × product_price
+     
+     So you need the Sales module first. Then:
+       PROFIT = Total Revenue - Total Expenses
+     
+     That's it. Simple as that. No processing cost needed since 
+     you already bake it into the product price.
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 10: PRODUCT / PALAY QUANTITY TRACKING — FULL FLOW
+════════════════════════════════════════════════════════════════
+
+  ── THE QUANTITY JOURNEY ──────────────────────────────────
+
+  STEP 1: Procurement (Raw Palay Enters System)
+  ──────────────────────────────────────────────
+    Fields: quantity_kg, sacks
+    Status: Pending → Drying → Dried → Completed
+    Batch: optional grouping via batch_id → ProcurementBatch
+
+    When sent to drying:
+      - Procurement status changes to "Drying"
+      - Drying record created with quantity_kg + sacks from this procurement
+      - If batch drying: batch's remaining_sacks/remaining_kg decremented
+
+  STEP 2: Drying (Palay Being Dried)
+  ──────────────────────────────────────────────
+    Fields: quantity_kg, sacks, quantity_out
+    Status: Drying → Dried | Cancelled
+
+    quantity_out tracks how much has been sent to processing:
+      - Starts at 0
+      - INCREMENTED when Processing record is created
+      - DECREMENTED when Processing record is deleted
+      - remaining_quantity = max(0, quantity_kg - quantity_out)
+
+    Multi-source pivot: drying_batch_procurements
+      - Tracks: drying_process_id, procurement_id, sacks_taken, quantity_kg
+      - Shows exactly how much from each procurement went into this drying
+
+  STEP 3: Processing (Milling — Palay → Rice)
+  ──────────────────────────────────────────────
+    Fields: input_kg, output_kg, husk_kg, yield_percent, stock_out
+    Status: Pending → Processing → Completed
+    Stock Status: Pending | Partial | Distributed (for completed)
+
+    Key calculations (auto on completion):
+      husk_kg = input_kg - output_kg
+      yield_percent = (output_kg / input_kg) × 100
+      remaining_stock = max(0, output_kg - stock_out)
+
+    Multi-source pivot: processing_drying_sources
+      - Tracks: processing_id, drying_process_id, quantity_kg
+      - One processing can pull from MULTIPLE drying sources
+      - Each source's quantity_out is properly incremented/decremented
+
+    stock_out field:
+      ⚠️ EXISTS but is NEVER auto-incremented by any service
+      ⚠️ Set to 0 on completion via completeProcessing()
+      ⚠️ NO automatic distribution to product stock
+      ⚠️ This is a PLACEHOLDER for a future feature
+
+  STEP 4: Product (Finished Rice for Sale)
+  ──────────────────────────────────────────────
+    Fields: stocks (integer), price, unit, weight
+    Status: Active | Inactive
+
+    stock management:
+      - Manual via ProductController::updateStock endpoint
+      - Three modes: add / subtract / set
+      - Example: POST /products/{id}/stock { action: 'add', quantity: 100 }
+
+    ❌ NO automatic flow from Processing output_kg → Product stocks
+       This is completely manual / disconnected
+
+
+  ── QUANTITY FLOW DIAGRAM ─────────────────────────────────
+
+  SUPPLIER delivers palay
+      │
+      ▼
+  ┌─────────────────────────┐
+  │ PROCUREMENT              │  quantity_kg: 8,000 kg
+  │ price_per_kg: ₱8.50     │  sacks: 500
+  │ total_cost: ₱68,000     │  status: Pending
+  │ batch_id: nullable       │
+  └────────┬────────────────┘
+           │ (send to drying)
+           ▼
+  ┌─────────────────────────┐
+  │ DRYING PROCESS           │  quantity_kg: 8,000 kg
+  │ sacks: 500               │  quantity_out: 0 → increments
+  │ price: ₱5/sack/day       │  days: 3
+  │ total_price: ₱7,500      │  status: Drying → Dried
+  └────────┬────────────────┘
+           │ (send to processing, quantity_out += input_kg)
+           ▼
+  ┌─────────────────────────┐
+  │ PROCESSING               │  input_kg: 8,000 kg
+  │ output_kg: 5,600 kg      │  husk_kg: 2,400 kg
+  │ yield_percent: 70%       │  stock_out: 0 ← BROKEN
+  │ NO COST FIELDS           │  status: Completed
+  └────────┬────────────────┘
+           │ (should distribute to product but...)
+           ▼
+  ┌─────────────────────────┐
+  │ PRODUCT                  │  stocks: ??? (manual only)
+  │ price: ₱45/kg (selling)  │  NO cost field
+  │ NO link to processing    │  NO auto-stock
+  └────────┬────────────────┘
+           │
+           ▼
+  ┌─────────────────────────┐
+  │ SALES / ORDERS           │  ❌ DOES NOT EXIST
+  │                          │  No model, no migration
+  │                          │  Frontend has fake data only
+  └─────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 11: ALL PIVOT / JUNCTION TABLES
+════════════════════════════════════════════════════════════════
+
+  ── drying_batch_procurements ─────────────────────────────
+
+  Purpose: When a batch is dried, tracks how much from each
+           procurement went into that specific drying record
+
+  Fields:
+    id, drying_process_id (FK), procurement_id (FK),
+    sacks_taken (int), quantity_kg (decimal), timestamps
+
+  Used by:
+    - ProcurementBatch::recalculateTotals() — computes remaining sacks/kg
+    - DryingProcessService — creates pivot rows when batch drying is created
+    - Proportional distribution: sacks split based on each procurement's
+      share of the batch total 
+
+
+  ── processing_drying_sources ─────────────────────────────
+
+  Purpose: Allows ONE processing record to draw from MULTIPLE
+           drying sources (multi-source processing)
+
+  Fields:
+    id, processing_id (FK), drying_process_id (FK),
+    quantity_kg (decimal), timestamps
+    UNIQUE constraint: (processing_id, drying_process_id)
+
+  Used by:
+    - ProcessingService::createProcessing() — proportionally splits
+      input_kg across selected sources, increments each quantity_out
+    - ProcessingService::updateProcessing() — reverses old splits,
+      recalculates new proportional distribution
+    - ProcessingService::deleteProcessing() — decrements quantity_out
+      on each source and detaches pivot rows
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 12: GAPS & SUGGESTIONS — HOW TO TRACK EVERYTHING
+════════════════════════════════════════════════════════════════
+
+  ── GAP 1: BATCH COST SUMMARY (NEEDED) ────────────────────
+
+  Problem: You need to SEE the total expenses per batch or 
+           standalone so the admin can price products wisely.
+
+  ✅ SOLUTION: Add a "Cost Summary" display per batch/standalone:
+    
+    For a BATCH:
+      Procurement cost = SUM(procurement.total_cost) for all in batch
+      Drying cost       = SUM(drying.total_price) for batch drying records
+      ───────────────────────────────────
+      Total Expenses    = Procurement + Drying
+      Output kg         = SUM(processing.output_kg) from this batch
+      Cost per kg       = Total Expenses ÷ Output kg
+    
+    For STANDALONE (no batch):
+      Procurement cost  = procurement.total_cost
+      Drying cost       = drying.total_price
+      ───────────────────────────────────
+      Total Expenses    = Procurement + Drying
+      Output kg         = processing.output_kg
+      Cost per kg       = Total Expenses ÷ Output kg
+
+  Where to show this:
+    - Batch detail view (already planned in Section 5 — "View Profitability")
+    - Processing page: after completion, show "Cost Breakdown" card
+    - Product page: optional "Estimated cost" if linked to processing
+
+  This is READ-ONLY info. No new fields needed. Just aggregate 
+  existing data (procurement.total_cost + drying.total_price).
+
+
+  ── GAP 2: NO PROCESSING → PRODUCT STOCK DISTRIBUTION ────
+
+  Problem: After processing completes (output_kg = 5,600 kg),
+           that rice needs to go into Product stock. Currently manual.
+
+  Suggestion: Create a "Distribution" feature:
+    - Processing view shows "Distribute to Product" button
+    - User selects which Product to add stock to
+    - User enters quantity (up to remaining_stock = output_kg - stock_out)
+    - stock_out increments on Processing
+    - stocks increments on Product
+    - Create a distribution_log table to track each movement:
+        processing_id, product_id, quantity_kg, distributed_at
+
+  This creates full traceability:
+    Procurement → Drying → Processing → Distribution → Product
+
+
+  ── GAP 3: NO SALES / ORDER SYSTEM ───────────────────────
+
+  Problem: You sell rice but have NO record of:
+    - Who bought it
+    - How much they bought
+    - When they bought it
+    - How much you earned
+
+  Suggestion: Create Sales module:
+
+  NEW TABLE: orders
+    id, customer_id (FK), order_number (auto: ORD-YYYYMMDD-001),
+    total_amount, discount, net_amount, payment_method,
+    payment_status (Pending/Paid/Partial), status (Pending/Completed/Cancelled),
+    order_date, notes, timestamps, soft_deletes
+
+  NEW TABLE: order_items
+    id, order_id (FK), product_id (FK), quantity, unit_price,
+    subtotal (quantity × unit_price), timestamps
+
+  On order completion:
+    - Product.stocks decremented by order_item.quantity
+    - Customer.orders incremented by 1
+
+  This enables:
+    - Revenue tracking (SUM of order net_amounts)
+    - Per-customer purchase history
+    - Product sales velocity (which products sell most)
+    - Inventory depletion tracking
+
+
+  ── GAP 4: NO REVENUE / PROFIT CALCULATION ───────────────
+
+  Problem: Without sales data, you can't calculate profit.
+
+  ✅ SIMPLIFIED (based on owner's decision):
+
+  TOTAL EXPENSES:
+    Procurement total_cost (palay buying)
+    + Drying total_price (drying fees)
+    = TOTAL PRODUCTION COST
+    (No processing cost — admin handles mentally via product pricing)
+
+  TOTAL REVENUE:
+    SUM(orders.net_amount) where status = Completed
+    (Requires Sales module — Phase 2)
+
+  PROFIT/LOSS:
+    Revenue - Total Expenses = Net Profit
+
+  Cost per kg of finished rice:
+    Total Expenses ÷ Total output_kg from processing
+    (Helps admin decide what selling price to set)
+
+
+  ── GAP 5: DASHBOARD USES FAKE DATA ──────────────────────
+
+  Problem: Dashboard.jsx has hardcoded arrays for:
+    - Revenue chart data
+    - Recent sales list
+    - Financial summary cards
+
+  Suggestion: Once Sales module exists, create:
+    DashboardController → aggregates real data:
+      - Today's sales, this week, this month
+      - Revenue trend (monthly)
+      - Top products by sales volume
+      - Top customers by purchase amount
+      - Inventory alerts (low stock products)
+      - Processing pipeline status
+      - Procurement spend trend
+      - Profit/Loss summary
+
+
+  ── GAP 6: CUSTOMER HAS NO ORDER LINKAGE ─────────────────
+
+  Problem: Customer model has name, contact info, and an
+           'orders' integer field that is NEVER auto-updated.
+           No actual relationship to any order/sale table.
+
+  Suggestion: Once orders table exists:
+    - Customer hasMany Orders
+    - Remove manual 'orders' counter field
+    - Use Customer::orders()->count() or withCount('orders')
+    - Add purchase history view on Customer detail page
+
+
+  ── GAP 7: NO EXPENSE CATEGORIES / TRACKING ──────────────
+
+  Problem: Only procurement + drying have cost fields.
+           Other business expenses (utilities, rent, transport,
+           maintenance, wages) are not tracked at all.
+
+  Suggestion (optional, for comprehensive tracking):
+
+  NEW TABLE: expenses
+    id, category (enum: Utilities, Transport, Maintenance,
+    Labor, Rent, Supplies, Other), amount, description,
+    expense_date, timestamps, soft_deletes
+
+  This enables:
+    - Monthly expense breakdown
+    - Total overhead cost calculation
+    - More accurate profit calculation including overhead
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 13: COMPLETE MONEY FLOW — CURRENT vs IDEAL
+════════════════════════════════════════════════════════════════
+
+  ── CURRENT (What works now) ──────────────────────────────
+
+  ₱ IN  → Nothing. No sales system. Revenue = ₱0 (untracked)
+  ₱ OUT → Procurement cost: ✅ tracked (total_cost)
+  ₱ OUT → Drying cost: ✅ tracked (total_price)
+  ₱ OUT → Processing cost: ❌ NOT needed (admin bakes into product price)
+  ₱ OUT → Other expenses: ❌ not tracked (optional future)
+  ₱ NET → Cannot calculate. Revenue unknown.
+
+
+  ── IDEAL (After implementing below roadmap) ──────────────
+
+  ₱ IN  → Sales orders (SUM of order net_amounts) ← need Sales module
+  ₱ OUT → Procurement cost (SUM of procurement total_cost) ← already ✅
+  ₱ OUT → Drying cost (SUM of drying total_price) ← already ✅
+  ₱ OUT → Other expenses (optional, expenses table) ← nice-to-have
+  ₱ NET → Revenue - All Costs = Profit/Loss ← the goal
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 15: REVISED IMPLEMENTATION ROADMAP
+  (Based on owner's decision: no processing cost tracking)
+════════════════════════════════════════════════════════════════
+
+  YOUR FORMULA FOR PROFIT:
+  ─────────────────────────
+    Total Expenses = procurement.total_cost + drying.total_price
+    Total Revenue  = SUM(orders.net_amount) where completed
+    PROFIT         = Revenue - Expenses
+
+  ── STEP-BY-STEP IMPLEMENTATION ORDER ─────────────────────
+
+  PHASE 1: DISTRIBUTION (Processing → Product)
+  ──────────────────────────────────────────────
+  Purpose: Connect milled rice to product stock automatically
+
+  What to build:
+    1. "Distribute" button on completed Processing records
+    2. Modal: select Product + enter quantity (≤ remaining output_kg)
+    3. Backend: increment Product.stocks, increment Processing.stock_out
+    4. Optional: distribution_log table for history
+       (processing_id, product_id, quantity_kg, distributed_at)
+
+  After this:
+    Processing output_kg → Product stocks (tracked, not manual)
+    Admin can see: this product's stock came from this processing
+
+
+  PHASE 2: SALES MODULE (Track Revenue)
+  ──────────────────────────────────────────────
+  Purpose: Record every sale so you know your revenue
+
+  What to build:
+    1. Order model + migration:
+       id, customer_id, order_number (auto: ORD-YYYYMMDD-001),
+       total_amount, discount, net_amount, payment_method,
+       payment_status, status, order_date, notes, timestamps
+
+    2. OrderItem model + migration:
+       id, order_id, product_id, quantity, unit_price, subtotal
+
+    3. OrderService + OrderController + OrderResource
+
+    4. On order completion:
+       - Product.stocks decremented by quantity
+       - Customer order count updated
+
+    5. Sales.jsx frontend: replace fake data with real API
+
+  After this:
+    Revenue = SUM(completed orders net_amount) ✅
+    You can see WHO bought WHAT, WHEN, and HOW MUCH
+
+
+  PHASE 3: BATCH COST SUMMARY (Show Expenses)
+  ──────────────────────────────────────────────
+  Purpose: Let admin see total cost before pricing products
+
+  What to build:
+    1. API endpoint: GET /batches/{id}/cost-summary
+       Returns:
+         procurement_cost: SUM(procurement.total_cost) in batch
+         drying_cost:      SUM(drying.total_price) for batch
+         total_expenses:   procurement + drying
+         output_kg:        SUM(processing.output_kg)
+         cost_per_kg:      total_expenses ÷ output_kg
+
+    2. Same for standalone (by procurement_id chain):
+       GET /procurement/{id}/cost-summary
+       Traces: procurement → drying → processing
+       Returns same breakdown
+
+    3. UI: "Cost Breakdown" card on:
+       - Batch detail view
+       - Completed Processing view
+       - Product page (if linked)
+
+  After this:
+    Admin sees: "This batch cost ₱74,000 → ₱13.21/kg"
+    Admin decides: "I'll sell at ₱45/kg for good profit" ✅
+
+
+  PHASE 4: DASHBOARD WITH REAL DATA
+  ──────────────────────────────────────────────
+  Purpose: Replace hardcoded fake data with real numbers
+
+  What to build:
+    1. DashboardController with aggregated queries:
+       - Total Revenue (from orders)
+       - Total Expenses (from procurement + drying)
+       - Profit/Loss = Revenue - Expenses
+       - Revenue trend (monthly chart)
+       - Top products by sales volume
+       - Top customers by purchase amount
+       - Low stock alerts
+       - Processing pipeline status
+       - Recent sales list (real, not fake)
+
+    2. Dashboard.jsx: consume real API data
+
+  After this:
+    Full business visibility ✅
+    Profit/Loss calculated automatically ✅
+
+
+  PHASE 5: OPTIONAL ENHANCEMENTS
+  ──────────────────────────────────────────────
+  (Nice-to-have, not required for basic cost tracking)
+
+    □ Expenses table (track utilities, rent, transport, wages)
+    □ Customer ↔ Order relationship (purchase history page)
+    □ Monthly financial report / export
+    □ Per-product profitability report
+    □ Distribution log table (processing → product movement history)
+
+
+  ── VISUAL SUMMARY OF THE FINAL FLOW ─────────────────────
+
+  SUPPLIER delivers palay
+      │
+      ▼
+  ┌──────────────────────┐
+  │ PROCUREMENT           │  ₱ OUT → total_cost = qty × price_per_kg
+  │ (batch or standalone) │
+  └──────────┬───────────┘
+             │
+             ▼
+  ┌──────────────────────┐
+  │ DRYING                │  ₱ OUT → total_price = sacks × price × days
+  └──────────┬───────────┘
+             │
+             ▼
+  ┌──────────────────────┐
+  │ PROCESSING (Milling)  │  No cost tracked (admin bakes into price)
+  │ input_kg → output_kg  │  yield_percent calculated
+  └──────────┬───────────┘
+             │ Phase 1: Distribute
+             ▼
+  ┌──────────────────────┐
+  │ PRODUCT               │  Admin sets selling price
+  │ stocks updated        │  Sees batch cost summary first
+  └──────────┬───────────┘
+             │ Phase 2: Sales Module
+             ▼
+  ┌──────────────────────┐
+  │ SALES / ORDERS        │  ₱ IN → customer buys → revenue recorded
+  │ order_items           │  Product.stocks decremented
+  └──────────┬───────────┘
+             │
+             ▼
+  ┌──────────────────────┐
+  │ DASHBOARD             │  Phase 4: Real data
+  │ Revenue - Expenses    │  = PROFIT / LOSS
+  │ Charts, trends, alerts│
+  └──────────────────────┘
+
+
+  ── WHAT YOU GET AT THE END ───────────────────────────────
+
+  ✅ Total Expenses: procurement cost + drying cost (per batch)
+  ✅ Cost per kg: total expenses ÷ output_kg (after milling)
+  ✅ Revenue: tracked via Sales module (price × qty sold)
+  ✅ Profit: Revenue - Expenses (shown on Dashboard)
+  ✅ Full traceability: Supplier → Procurement → Drying → 
+     Processing → Product → Customer (who bought it)
+  ✅ Admin makes pricing decisions based on visible cost data
+
+
+════════════════════════════════════════════════════════════════
+  SECTION 14: COMPLETE TABLE INVENTORY (as of Feb 23, 2026)
+════════════════════════════════════════════════════════════════
+
+  MAIN TABLES:
+    users                     → Authentication (Fortify)
+    suppliers                 → Palay suppliers (name, contact, address)
+    categories                → Rice varieties (name, color, description)
+    procurements              → Palay purchases (qty, cost, status, batch_id)
+    procurement_batches       → Groups procurements by variety/season
+    drying_processes          → Drying records (sacks, days, price, status)
+    processings               → Milling records (input, output, yield, status)
+    products                  → Finished rice for sale (stocks, price, unit)
+    customers                 → Buyers (name, contact, orders count)
+
+  PIVOT TABLES:
+    drying_batch_procurements → Batch drying ↔ procurement breakdown
+    processing_drying_sources → Processing ↔ multiple drying sources
+
+  SYSTEM TABLES:
+    cache, cache_locks        → Laravel cache
+    sessions                  → User sessions
+    jobs, job_batches, failed_jobs → Queue (if used)
+    password_reset_tokens     → Auth
+
+  WEBSITE/SETTINGS TABLES:
+    appearance_settings       → Theme/appearance config
+    business_settings         → Business info (name, address, etc.)
+    website_contents          → CMS content
+
+================================================================
+  END OF AUDIT — February 23, 2026
+  Next Steps: Implement Phase 1 (Distribution), then Phase 2 (Sales)
+  See Section 15 for the full step-by-step roadmap.
+================================================================

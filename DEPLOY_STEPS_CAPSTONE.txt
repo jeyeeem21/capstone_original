@@ -1,0 +1,295 @@
+================================================================================
+  DEPLOYMENT STEPS - KJP RICEMILL INVENTORY & SALES SYSTEM (CAPSTONE)
+  GitHub Repo:    https://github.com/Jeyeeem21/capstone1
+  Domain:         kjpricemill.com
+  API Subdomain:  api.kjpricemill.com
+  SSH:            ssh -i "$HOME\.ssh\hostinger_deploy" -p 65002 u940130461@37.44.245.132
+  Server home:    /home/u940130461/
+  Structure:      laravel_backend/ + react_frontend/  (NO Python ML needed)
+================================================================================
+
+
+════════════════════════════════════════
+  STEP 1: PUSH LATEST CODE TO GITHUB
+════════════════════════════════════════
+
+  STATUS: ✅ DONE — already pushed!
+
+
+════════════════════════════════════════
+  STEP 2: HOSTINGER - CREATE DATABASE
+════════════════════════════════════════
+
+  STATUS: ⏳ DO THIS NOW
+
+  1. hPanel → Websites → kjpricemill.com
+  2. Left sidebar → Databases → MySQL Databases
+  3. Click "Create a new database"
+  4. Fill in:
+       Database name: kjp_ricemill
+       Username:      kjp_user
+       Password:      click Generate → ⚠️ COPY AND SAVE IT!
+  5. Click Create
+
+  ⚠️ SAVE YOUR DB DETAILS HERE (fill in after creating):
+       Full DB name:   u940130461_kjp_ricemill   ← usually this format
+       Full username:  u940130461_kjp_user        ← usually this format
+       Password:       ________________________________
+       Host:           localhost
+
+
+════════════════════════════════════════
+  STEP 3: HOSTINGER - CREATE SUBDOMAIN
+════════════════════════════════════════
+
+  STATUS: ✅ DONE
+  api.kjpricemill.com → /home/u940130461/domains/kjpricemill.com/public_html/api
+
+
+════════════════════════════════════════
+  STEP 4: HOSTINGER - SSH
+════════════════════════════════════════
+
+  STATUS: ✅ DONE
+  SSH host:      37.44.245.132
+  SSH port:      65002
+  SSH username:  u940130461
+  SSH key:       $HOME\.ssh\hostinger_deploy  (github deploy — already in Hostinger)
+
+
+════════════════════════════════════════
+  STEP 5: SSH INTO SERVER - LARAVEL SETUP
+════════════════════════════════════════
+
+  STATUS: ⏳ DO THIS AFTER STEP 2
+
+  Open PowerShell on your PC and run:
+
+    ssh -i "$HOME\.ssh\hostinger_deploy" -p 65002 u940130461@37.44.245.132
+
+  Once connected, run these commands ONE BY ONE:
+
+  --- Clone the repo ---
+
+    cd ~
+    git clone https://github.com/Jeyeeem21/capstone1.git capstone1
+
+  --- Link api.kjpricemill.com to Laravel public folder ---
+
+    rm -rf /home/u940130461/domains/kjpricemill.com/public_html/api
+    ln -s /home/u940130461/capstone1/laravel_backend/public /home/u940130461/domains/kjpricemill.com/public_html/api
+
+  --- Install PHP dependencies ---
+
+    cd ~/capstone1/laravel_backend
+    composer install --optimize-autoloader --no-dev
+
+  --- Create .env file ---
+
+    cp .env.example .env
+    nano .env
+
+  ════ INSIDE NANO — fill in these values (replace DB password with yours from Step 2) ════
+
+    APP_NAME="KJP Ricemill"
+    APP_ENV=production
+    APP_KEY=
+    APP_DEBUG=false
+    APP_URL=https://api.kjpricemill.com
+
+    DB_CONNECTION=mysql
+    DB_HOST=localhost
+    DB_PORT=3306
+    DB_DATABASE=u940130461_kjp_ricemill
+    DB_USERNAME=u940130461_kjp_user
+    DB_PASSWORD=your_generated_password_from_step2
+
+    SESSION_DRIVER=database
+    SESSION_LIFETIME=120
+    SESSION_PATH=/
+    SESSION_DOMAIN=.kjpricemill.com
+
+    CACHE_STORE=database
+    QUEUE_CONNECTION=database
+    FILESYSTEM_DISK=local
+
+    SANCTUM_STATEFUL_DOMAINS=kjpricemill.com,www.kjpricemill.com,api.kjpricemill.com
+    FRONTEND_URL=https://kjpricemill.com
+
+    MAIL_MAILER=smtp
+    MAIL_HOST=smtp.gmail.com
+    MAIL_PORT=587
+    MAIL_USERNAME=your-gmail@gmail.com
+    MAIL_PASSWORD=xxxx xxxx xxxx xxxx
+    MAIL_ENCRYPTION=tls
+    MAIL_FROM_ADDRESS=your-gmail@gmail.com
+    MAIL_FROM_NAME="KJP Ricemill"
+
+  ════ Save nano: press Ctrl+X → Y → Enter ════
+
+  --- Run Laravel setup commands ---
+
+    php artisan key:generate
+    php artisan migrate --force
+    php artisan db:seed --force
+    php artisan config:cache
+    php artisan route:cache
+    php artisan view:cache
+    chmod -R 775 storage bootstrap/cache
+    php artisan storage:link
+
+    exit
+
+  ✅ Backend is live at https://api.kjpricemill.com
+
+
+════════════════════════════════════════
+  STEP 6: BUILD & UPLOAD REACT FRONTEND
+════════════════════════════════════════
+
+On your LOCAL PC:
+
+  STATUS: ⏳ DO THIS AFTER STEP 5
+
+  --- 6A: Update API URL in config.js ---
+
+  Open this file on your LOCAL PC:
+    react_frontend/src/api/config.js
+
+  Change line 12 from:
+    export const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+  To:
+    export const API_BASE_URL = 'https://api.kjpricemill.com/api';
+
+  --- 6B: Build ---
+
+  Open PowerShell:
+
+    cd "c:\laragon\www\Jeyeeem's files\Capstone\capstone1\react_frontend"
+    npm install
+    npm run build
+
+  This creates a dist/ folder.
+
+  --- 6C: Upload to Hostinger ---
+
+  1. hPanel → Websites → kjpricemill.com → Files → File Manager
+  2. Navigate to: /home/u940130461/domains/kjpricemill.com/public_html/
+  3. Delete the default index.html if any
+  4. Upload EVERYTHING INSIDE the dist/ folder (not the folder itself)
+     (upload: assets/, index.html, vite.svg, etc.)
+
+  --- 6D: Create .htaccess in public_html/ ---
+
+  In File Manager, create new file named .htaccess with this content:
+
+    <IfModule mod_rewrite.c>
+        RewriteEngine On
+        RewriteBase /
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteRule ^ index.html [QSA,L]
+    </IfModule>
+
+  --- 6E: REVERT config.js back to localhost ---
+
+  ⚠️ IMPORTANT — after building, change config.js back to:
+    export const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+  ✅ Frontend is live at https://kjpricemill.com
+
+
+════════════════════════════════════════
+  STEP 7: SSL CERTIFICATE
+════════════════════════════════════════
+
+  STATUS: ⏳ DO THIS AFTER STEP 6
+
+  1. hPanel → Websites → kjpricemill.com → Security → SSL
+  2. Install SSL for kjpricemill.com → Force HTTPS ON
+  3. Install SSL for api.kjpricemill.com → Force HTTPS ON
+
+
+════════════════════════════════════════
+  STEP 8: SET UP AUTO-DEPLOY (OPTIONAL)
+════════════════════════════════════════
+
+  STATUS: ⏳ DO THIS AFTER STEP 7
+  (deploy.yml is already created in .github/workflows/)
+
+  --- 8A: Add secrets to GitHub ---
+
+  Go to: https://github.com/Jeyeeem21/capstone1
+    → Settings → Secrets and variables → Actions
+    → New repository secret
+
+  Add these 4 secrets (exact names, exact values):
+
+    SSH_HOST         →  37.44.245.132
+    SSH_PORT         →  65002
+    SSH_USERNAME     →  u940130461
+    SSH_PRIVATE_KEY  →  run this on your PC to get it:
+                        Get-Content "$HOME\.ssh\hostinger_deploy"
+                        (paste entire output including -----BEGIN/END----- lines)
+
+  --- 8B: Push the workflow ---
+
+    cd "c:\laragon\www\Jeyeeem's files\Capstone\capstone1"
+    git add .github .gitignore
+    git commit -m "Add auto-deploy workflow"
+    git push
+
+  ✅ Every future git push → auto-deploys backend to Hostinger!
+
+
+════════════════════════════════════════
+  REVERTING API URL AFTER DEPLOY
+════════════════════════════════════════
+
+⚠️ IMPORTANT: After building the frontend, revert config.js
+   back to localhost so local development still works:
+
+   Change back to:
+   export const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+   Do NOT commit the production URL to git.
+
+
+════════════════════════════════════════
+  FUTURE UPDATES WORKFLOW
+════════════════════════════════════════
+
+  BACKEND UPDATE (automatic):
+    git add . && git commit -m "Update" && git push
+    GitHub Actions auto-deploys ✅
+
+  FRONTEND UPDATE (manual):
+    1. Edit react_frontend/src/api/config.js → change to: https://api.kjpricemill.com/api
+    2. npm run build  (in react_frontend/)
+    3. Upload dist/ contents to /domains/kjpricemill.com/public_html/ on Hostinger
+    4. Revert config.js back to: http://127.0.0.1:8000/api
+
+
+================================================================================
+  PROGRESS CHECKLIST
+================================================================================
+
+  Step 1  - Push latest code to GitHub             [✅]
+  Step 2  - Create MySQL Database                   [ ]  ← DO THIS NEXT
+  Step 3  - Create api.kjpricemill.com subdomain   [✅]
+  Step 4  - SSH enabled + key exists               [✅]
+  Step 5  - SSH setup (clone, .env, migrate)        [ ]
+  Step 6  - Build & upload React frontend           [ ]
+  Step 7  - SSL Certificate                         [ ]
+  Step 8  - Auto-deploy GitHub Actions              [ ]
+
+================================================================================
+  REAL URLS
+================================================================================
+
+  Frontend:  https://kjpricemill.com
+  Backend:   https://api.kjpricemill.com
+  GitHub:    https://github.com/Jeyeeem21/capstone1
+
+================================================================================

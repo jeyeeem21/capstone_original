@@ -1,0 +1,48 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy Laravel backend via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -e
+            cd /home/u940130461/capstone1
+
+            # Discard any local changes (e.g. permission changes from chmod)
+            git checkout -- . || true
+            git clean -fd || true
+
+            # Pull latest code
+            git pull origin main
+
+            # Install/update PHP dependencies (update handles PHP version differences)
+            cd laravel_backend
+            composer update --optimize-autoloader --no-dev --quiet
+
+            # Run any new migrations
+            php artisan migrate --force
+
+            # Clear and rebuild caches
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            # Fix storage permissions
+            chmod -R 775 storage bootstrap/cache
+
+            echo "✅ Backend deployed successfully!"

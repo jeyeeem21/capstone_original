@@ -1,0 +1,674 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Variables for Theming - These are default fallback values */
+/* They will be overwritten by JavaScript from ThemeContext */
+:root {
+  /* Primary colors (for active states, main accent) - will be set by JS */
+  --color-primary-50: #f7f7f8;
+  --color-primary-100: #ececef;
+  --color-primary-200: #d5d6dc;
+  --color-primary-300: #b1b3be;
+  --color-primary-400: #86899b;
+  --color-primary-500: #6b6f80;
+  --color-primary-600: #585b69;
+  --color-primary-700: #484a56;
+  --color-primary-800: #3f4049;
+  --color-primary-900: #37383f;
+  
+  /* Button colors - will be set by JS */
+  --color-button-50: #f7f7f8;
+  --color-button-100: #ececef;
+  --color-button-200: #d5d6dc;
+  --color-button-300: #b1b3be;
+  --color-button-400: #86899b;
+  --color-button-500: #6b6f80;
+  --color-button-600: #585b69;
+  --color-button-700: #484a56;
+  --color-button-800: #3f4049;
+  --color-button-900: #37383f;
+  --color-button-secondary: #eab308;
+  
+  /* Border colors - will be set by JS */
+  --color-border-50: #f7f7f8;
+  --color-border-100: #ececef;
+  --color-border-200: #d5d6dc;
+  --color-border-300: #b1b3be;
+  --color-border-400: #86899b;
+  --color-border-500: #6b6f80;
+  --color-border-600: #585b69;
+  --color-border-700: #484a56;
+  --color-border-800: #3f4049;
+  --color-border-900: #37383f;
+  
+  /* Background colors */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f0fdf4;
+  --color-bg-sidebar: #ffffff;
+  --color-bg-body: #f3f4f6;
+  --color-bg-content: #ffffff;
+  --color-bg-footer: #111827;
+  
+  /* Pagination colors */
+  --color-pagination-bg: #22c55e;
+  --color-pagination-text: #ffffff;
+  
+  /* Text colors */
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-text-sidebar: #374151;
+  --color-text-content: #1f2937;
+  
+  /* Font sizes */
+  --font-size-base: 16px;
+  --font-size-sidebar: 15px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+}
+
+/* Dark mode overrides - only html.dark is used (Tailwind dark: variant) */
+html.dark {
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+/* Dark mode component overrides */
+.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-gray-100 {
+  background-color: #334155 !important;
+}
+
+.dark .text-gray-800,
+.dark .text-gray-900 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-gray-700 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+.dark .border-gray-200,
+.dark .border-gray-100 {
+  border-color: #475569 !important;
+}
+
+.dark .border-gray-300 {
+  border-color: #64748b !important;
+}
+
+/* border-primary classes use CSS variables from DB theme - no override needed */
+
+/* Dark mode sidebar */
+.dark aside {
+  background-color: #1e293b !important;
+}
+
+/* Dark mode cards */
+.dark .shadow-xl,
+.dark .shadow-lg {
+  --tw-shadow-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Dark mode inputs */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: var(--color-button-500) !important;
+  box-shadow: 0 0 0 3px rgba(var(--color-button-500), 0.2) !important;
+}
+
+/* Dark mode modals */
+.dark .bg-white\\/80 {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+}
+
+/* Dark mode tables */
+.dark table th {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark table td {
+  color: #e2e8f0 !important;
+}
+
+/* Table row hover using dynamic hover color */
+.table-row-hover:hover {
+  background-color: var(--color-hover, #dcfce7) !important;
+}
+
+.table-row-hover:hover td {
+  color: var(--color-button-900) !important;
+}
+
+.dark .table-row-hover:hover {
+  background-color: var(--color-hover-light, rgba(34, 197, 94, 0.3)) !important;
+}
+
+.dark .table-row-hover:hover td {
+  color: var(--color-button-100) !important;
+}
+
+/* Table row selected state */
+.table-row-selected {
+  background-color: var(--color-button-200) !important;
+  border-left: 4px solid var(--color-button-500) !important;
+}
+
+.table-row-selected td {
+  color: var(--color-button-900) !important;
+}
+
+.dark .table-row-selected {
+  background-color: var(--color-button-700) !important;
+}
+
+.dark .table-row-selected td {
+  color: var(--color-button-100) !important;
+}
+
+/* Table header hover */
+.table-header-hover:hover {
+  background-color: var(--color-button-100) !important;
+}
+
+.dark .table-header-hover:hover {
+  background-color: var(--color-button-600) !important;
+  color: var(--color-button-100) !important;
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* bg-primary and gradient-primary classes use CSS variables from DB theme - no override needed */
+
+/* Dark mode image visibility - ensure logos/photos on dark backgrounds remain visible */
+.dark img[alt="Business Logo"],
+.dark img[alt="Profile Photo"] {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+/* Ensure upload photo area border is visible in dark mode */
+.dark .border-dashed:not(.border-primary-200):not(.border-primary-300):not(.border-button-200) {
+  border-color: #64748b !important;
+}
+
+/* Dark mode colored info boxes */
+.dark .bg-gray-50.rounded-xl {
+  background-color: #334155 !important;
+}
+
+/* Dark mode semantic colored backgrounds */
+.dark .bg-yellow-50 {
+  background-color: rgba(234, 179, 8, 0.1) !important;
+}
+.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+.dark .bg-green-50 {
+  background-color: rgba(34, 197, 94, 0.1) !important;
+}
+.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+}
+.dark .bg-purple-50 {
+  background-color: rgba(139, 92, 246, 0.1) !important;
+}
+
+.dark .bg-yellow-100 {
+  background-color: rgba(234, 179, 8, 0.15) !important;
+}
+.dark .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+.dark .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+.dark .bg-green-100 {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+}
+.dark .bg-orange-100 {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+.dark .bg-purple-100 {
+  background-color: rgba(139, 92, 246, 0.15) !important;
+}
+
+/* Dark mode semantic colored borders */
+.dark .border-yellow-200 {
+  border-color: rgba(234, 179, 8, 0.3) !important;
+}
+.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+.dark .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+.dark .border-green-200 {
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+/* Dark mode semantic colored text */
+.dark .text-yellow-700 {
+  color: #fbbf24 !important;
+}
+.dark .text-blue-700 {
+  color: #60a5fa !important;
+}
+.dark .text-red-700 {
+  color: #f87171 !important;
+}
+.dark .text-green-700 {
+  color: #4ade80 !important;
+}
+.dark .text-blue-800 {
+  color: #93c5fd !important;
+}
+.dark .text-red-800 {
+  color: #fca5a5 !important;
+}
+.dark .text-yellow-800 {
+  color: #fcd34d !important;
+}
+
+/* Dark mode skeleton shimmer */
+.dark .from-gray-300 {
+  --tw-gradient-from: #475569 !important;
+}
+.dark .via-gray-200 {
+  --tw-gradient-via: #334155 !important;
+}
+.dark .to-gray-300 {
+  --tw-gradient-to: #475569 !important;
+}
+
+/* Dark mode hover states */
+.dark .hover\:bg-gray-50:hover {
+  background-color: #334155 !important;
+}
+.dark .hover\:bg-gray-100:hover {
+  background-color: #475569 !important;
+}
+
+/* Dark mode semantic hover states */
+.dark .hover\:bg-yellow-50:hover {
+  background-color: rgba(234, 179, 8, 0.1) !important;
+}
+.dark .hover\:bg-blue-50:hover {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+.dark .hover\:bg-red-50:hover {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+.dark .hover\:bg-green-50:hover {
+  background-color: rgba(34, 197, 94, 0.1) !important;
+}
+.dark .hover\:bg-orange-50:hover {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+}
+.dark .hover\:bg-purple-50:hover {
+  background-color: rgba(139, 92, 246, 0.1) !important;
+}
+.dark .hover\:bg-amber-50:hover {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+}
+
+/* Dark mode additional border colors */
+.dark .border-orange-200 {
+  border-color: rgba(249, 115, 22, 0.3) !important;
+}
+.dark .border-purple-200 {
+  border-color: rgba(139, 92, 246, 0.3) !important;
+}
+
+/* Dark mode additional text colors */
+.dark .text-orange-600 {
+  color: #fb923c !important;
+}
+.dark .text-purple-600 {
+  color: #a78bfa !important;
+}
+.dark .text-green-600 {
+  color: #4ade80 !important;
+}
+.dark .text-blue-600 {
+  color: #60a5fa !important;
+}
+.dark .text-red-600 {
+  color: #f87171 !important;
+}
+.dark .text-yellow-600 {
+  color: #fbbf24 !important;
+}
+
+/* Dark mode hover text colors */
+.dark .hover\:text-yellow-700:hover {
+  color: #fbbf24 !important;
+}
+.dark .hover\:text-blue-700:hover {
+  color: #60a5fa !important;
+}
+.dark .hover\:text-green-700:hover {
+  color: #4ade80 !important;
+}
+.dark .hover\:text-red-700:hover {
+  color: #f87171 !important;
+}
+
+/* Dark mode opacity-modified semantic backgrounds */
+.dark .bg-red-50\/50 {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+}
+.dark .bg-green-50\/30 {
+  background-color: rgba(34, 197, 94, 0.08) !important;
+}
+.dark .bg-green-50\/50 {
+  background-color: rgba(34, 197, 94, 0.08) !important;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: var(--font-size-base, 16px);
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  font-size: var(--font-size-base, 16px);
+  color: var(--color-text-content, #1f2937);
+  line-height: 1.5;
+}
+
+/* Apply theme font sizes to common elements */
+h1, h2, h3, h4, h5, h6, p, span, div, label, button, input, select, textarea, a, li, td, th {
+  font-size: inherit;
+}
+
+/* Specific sizing overrides using CSS variables */
+.text-xs { font-size: var(--font-size-xs, 12px) !important; }
+.text-sm { font-size: var(--font-size-sm, 14px) !important; }
+.text-base { font-size: var(--font-size-base, 16px) !important; }
+.text-lg { font-size: var(--font-size-lg, 18px) !important; }
+.text-xl { font-size: var(--font-size-xl, 20px) !important; }
+.text-2xl { font-size: var(--font-size-2xl, 24px) !important; }
+
+/* Apply theme text colors */
+.text-gray-800, .text-gray-900 {
+  color: var(--color-text-content, #1f2937);
+}
+
+.text-gray-500, .text-gray-600 {
+  color: var(--color-text-secondary, #6b7280);
+}
+
+/* Sidebar specific font size */
+aside, aside * {
+  font-size: var(--font-size-sidebar, 15px);
+}
+
+/* Sidebar menu item hover - override inline styles */
+aside button:hover,
+aside a:hover {
+  background-color: var(--color-button-500) !important;
+  background-image: linear-gradient(to right, var(--color-button-500), var(--color-button-400)) !important;
+  color: #ffffff !important;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Settings horizontal menu tabs - dark mode */
+.dark .bg-button-500 {
+  background-color: var(--color-button-500) !important;
+}
+
+.dark .hover\:bg-button-100:hover {
+  background-color: var(--color-button-800) !important;
+}
+
+.dark .hover\:bg-gray-200:hover {
+  background-color: #475569 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #334155 !important;
+}
+
+aside button:hover span,
+aside a:hover span,
+aside button:hover svg,
+aside a:hover svg {
+  color: #ffffff !important;
+}
+
+/* Sidebar menu item active state - keep white */
+aside button.bg-gradient-to-r,
+aside button.bg-gradient-to-r span,
+aside button.bg-gradient-to-r svg,
+aside a.bg-gradient-to-r,
+aside a.bg-gradient-to-r span,
+aside a.bg-gradient-to-r svg {
+  color: #ffffff !important;
+}
+
+/* Active sidebar item - no transform on hover */
+aside button.bg-gradient-to-r:hover,
+aside a.bg-gradient-to-r:hover {
+  transform: none;
+}
+
+/* Submenu items - slightly different hover */
+aside .pl-4 a:hover {
+  background-color: var(--color-button-500) !important;
+  background-image: none !important;
+  transform: translateX(2px);
+}
+
+/* Content area text color */
+main, main * {
+  color: inherit;
+}
+
+/* Modal and form elements inherit the base font size */
+[role="dialog"], [role="dialog"] * {
+  font-size: var(--font-size-base, 16px);
+}
+
+/* Form inputs use base font size */
+input, select, textarea {
+  font-size: var(--font-size-base, 16px) !important;
+}
+
+/* Labels slightly smaller */
+label {
+  font-size: calc(var(--font-size-base, 16px) - 1px);
+}
+
+/* Descriptions and hints */
+.text-gray-400, .text-gray-500 {
+  color: var(--color-text-secondary, #6b7280);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Hide scrollbar for sidebar */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Safe area support for iPhones with notch/home bar */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Custom scrollbar for better UX */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Fast skeleton shimmer animation */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-skeleton-pulse {
+  animation: skeleton-shimmer 0.6s linear infinite;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Shake animation for validation errors */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+

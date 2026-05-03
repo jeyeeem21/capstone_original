@@ -1,0 +1,620 @@
+================================================================================
+            KJP RICEMILL — PRINTED REPORTS GUIDE
+           What Reports to Add, Where They Go, and What They Show
+                        Created: April 22, 2026
+================================================================================
+
+This document covers all recommended printed reports for the KJP Ricemill
+system, with a focus on profitability tracking (did the business make money?).
+It also explains where each report lives in the admin panel, what data it uses,
+and how profit/loss is calculated from the existing database.
+
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  0. COST RECORDS PAGE — WHAT IT ALREADY SHOWS (INSIGHTS)
+  1. WHY ADD PRINTED REPORTS
+  2. WHERE TO ADD REPORTS (PAGE PLACEMENT)
+  3. REPORT #1 — PROFIT & LOSS (P&L) STATEMENT  ← MOST IMPORTANT
+  4. REPORT #2 — SALES SUMMARY REPORT
+  5. REPORT #3 — PROCUREMENT & RAW MATERIAL COST REPORT
+  6. REPORT #4 — DRYING COST REPORT
+  7. REPORT #5 — PROCESSING YIELD & EFFICIENCY REPORT
+  8. REPORT #6 — INVENTORY VALUATION REPORT
+  9. REPORT #7 — ORDER TRANSACTION RECEIPT (Per Order)
+ 10. HOW PROFIT IS CALCULATED (FORMULA BREAKDOWN)
+ 11. DATA SOURCES FOR EACH REPORT (DATABASE FIELDS)
+ 12. IMPLEMENTATION PLAN (WHICH PAGE TO ADD EACH REPORT)
+
+
+================================================================================
+0. COST RECORDS PAGE — WHAT IT ALREADY SHOWS (INSIGHTS)
+================================================================================
+
+Location: Admin Panel → Inventory → "Costs" tab (4th tab)
+Route:    /admin/inventory?tab=costs
+
+This tab already EXISTS in the system and is the closest thing to a
+cost/profit report. Understanding what it shows is critical before building
+the full Reports page.
+
+── WHAT THE COSTS TAB SHOWS ─────────────────────────────────────────────────
+
+  Each row in the table = one STOCK DISTRIBUTION EVENT
+  (i.e., when completed processing output was added to a product's inventory)
+
+  COLUMNS:
+  ┌─────────────────┬──────────────────────────────────────────────────────┐
+  │ Column          │ What It Means                                        │
+  ├─────────────────┼──────────────────────────────────────────────────────┤
+  │ Product         │ Product name + variety color dot                     │
+  │ Units           │ Bags/units added + total kg + kg per sack            │
+  │ Procurement     │ Raw palay cost share for this batch                  │
+  │ Drying          │ Drying cost share for this batch                     │
+  │ Total Cost      │ Procurement + Drying (COGS for this distribution)    │
+  │ Cost / Unit     │ Total Cost ÷ Units added = break-even per bag        │
+  │ Sell Price      │ Current selling price per bag (from Products table)  │
+  │ Profit / Unit   │ Sell Price − Cost/Unit (green = profit, red = loss)  │
+  │ Margin          │ (Profit/Unit ÷ Sell Price) × 100%                    │
+  │                 │   Green ≥ 20% | Amber ≥ 0% | Red < 0%               │
+  │ Date            │ When the stock was distributed into inventory        │
+  └─────────────────┴──────────────────────────────────────────────────────┘
+
+  STATS CARDS AT TOP:
+  ┌──────────────────────────┬──────────────────────────────────────────────┐
+  │ Card                     │ Formula                                      │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ Total Production Cost    │ SUM(total_cost) of all distributions         │
+  │ Avg. Cost / Unit         │ Total Cost ÷ Total Units produced            │
+  │ Avg. Profit / Unit       │ Average of all (Sell Price − Cost/Unit)      │
+  │ Avg. Profit Margin       │ Average margin % + total profit amount       │
+  └──────────────────────────┴──────────────────────────────────────────────┘
+
+  DOUBLE-CLICK a row → opens detail modal showing the exact processing
+  records that produced the stock, with drying source breakdown.
+
+── DATA SOURCE ───────────────────────────────────────────────────────────────
+
+  All data comes from the `stock_logs` table, filtered to:
+    - type = 'in'  (stock additions only)
+    - total_cost IS NOT NULL  (only distributions with cost data)
+
+  Fields used from stock_logs:
+    procurement_cost, drying_cost, total_cost, cost_per_unit,
+    selling_price, profit_per_unit, profit_margin, kg_amount,
+    source_type, source_processing_ids
+
+── KEY INSIGHT: SELL PRICE IS LIVE, NOT HISTORICAL ──────────────────────────
+
+  !! IMPORTANT — The "Sell Price" and therefore "Profit/Unit" and "Margin"
+     are computed using the CURRENT product price from the Products table.
+
+  This means:
+    - If a product's selling price was ₱1,200 when the stock was created,
+      but you changed it to ₱1,500 later, the Costs tab will show ₱1,500
+      as the sell price, recalculating all profit figures dynamically.
+    - This is POTENTIAL profit per unit (at current price), not ACTUAL
+      realized profit from historical sales.
+
+  For ACTUAL realized profit (what was truly earned), use:
+    - sale_items.unit_price  (the price at time of sale)
+    - combined with stock_logs.cost_per_unit (cost at time of production)
+
+── WHAT THE COSTS TAB IS GOOD FOR ───────────────────────────────────────────
+
+  ✓ Knowing the break-even price per bag for each production batch
+  ✓ Checking if current selling price covers production costs
+  ✓ Identifying which product batches had low or negative margins
+  ✓ Tracing full cost chain per stock distribution event
+  ✓ Comparing procurement + drying cost split per product
+
+── WHAT THE COSTS TAB IS NOT GOOD FOR ───────────────────────────────────────
+
+  ✗ Knowing total profit for a specific time period (monthly/yearly)
+  ✗ Comparing revenue earned vs costs incurred for a period
+  ✗ Showing actual sale amounts vs actual production costs
+  ✗ Filtering by date range for a specific period report
+  ✗ Printing a formatted report for accounting/management
+
+── WHAT NEEDS TO BE ADDED FOR PROPER PROFIT REPORTS ─────────────────────────
+
+  1. The Costs tab should get a DATE FILTER (from/to) so cost records for a
+     specific period can be isolated
+
+  2. A "Print Cost Report" button on the Costs tab to print the filtered table
+
+  3. The full P&L Report (Report #1 below) needs to JOIN:
+       stock_logs.total_cost  (production costs incurred in period)
+     WITH:
+       sale_items.unit_price × quantity (actual revenue earned in period)
+     TO PRODUCE:
+       Actual Realized Gross Profit = Revenue Earned − Production Costs Used
+
+  4. The stock_logs already store profit_per_unit and profit_margin at time
+     of distribution (using the price at that moment). A report should use
+     THOSE stored values for historical accuracy, not recalculate dynamically.
+
+── SUMMARY: COST RECORDS PAGE vs FULL P&L REPORT ────────────────────────────
+
+  Cost Records Tab (Inventory → Costs):
+    Shows: Production cost per distribution batch + potential unit profit
+    Good for: Pricing decisions, batch cost review, break-even analysis
+    Missing: Time-period filtering, actual sale revenue, printable format
+
+  Full P&L Report (to be built on Reports page):
+    Shows: Revenue earned − costs incurred = net profit for a period
+    Good for: "Did we make money this month?" business question
+    Requires: New Reports page + ReportController + 6 API endpoints
+
+
+================================================================================
+1. WHY ADD PRINTED REPORTS
+================================================================================
+
+The KJP Ricemill system already tracks ALL financial data needed for
+business reporting. The procurement costs, drying costs, processing yields,
+selling prices, discounts, and payment statuses are all stored in the database.
+
+What is MISSING is a way to:
+  - View a summarized profit/loss over a period (daily, monthly, yearly)
+  - Print or export financial reports for business records or accounting
+  - Know at a glance whether the business is profitable or operating at a loss
+
+Adding printed reports does NOT require new data collection — the data
+is already there. Reports are simply organized views of existing data.
+
+
+================================================================================
+2. WHERE TO ADD REPORTS (PAGE PLACEMENT)
+================================================================================
+
+OPTION A — NEW DEDICATED "REPORTS" PAGE (Recommended)
+  - Add a new "Reports" page in the admin sidebar
+  - This page is the single hub for all financial and operational reports
+  - Accessible to: super_admin and admin only
+  - Route: /admin/reports
+
+OPTION B — PRINT BUTTONS ON EXISTING PAGES (Supplementary)
+  - Add a "Print" or "Export PDF" button on each relevant page
+  - These are quick-print views of the data already displayed on that page
+  - These complement the main Reports page
+
+SUMMARY:
+  ┌──────────────────────────────┬────────────────────────────────────────┐
+  │ Report Type                  │ Where It Goes                          │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ Profit & Loss Statement      │ Reports page (NEW)                     │
+  │ Sales Summary                │ Reports page + print button on Sales   │
+  │ Procurement Cost Report      │ Reports page + print button on Proc.   │
+  │ Drying Cost Report           │ Reports page + print button on Drying  │
+  │ Processing Yield Report      │ Reports page + print button on Process.│
+  │ Inventory Valuation          │ Reports page + print button on Products│
+  │ Order Transaction Receipt    │ Print button on each order in Orders   │
+  └──────────────────────────────┴────────────────────────────────────────┘
+
+
+================================================================================
+3. REPORT #1 — PROFIT & LOSS (P&L) STATEMENT  ← MOST IMPORTANT
+================================================================================
+
+PURPOSE:
+  To answer the core business question: "Did KJP Ricemill make money
+  during this period, and how much?"
+
+DATE FILTER:
+  - Daily / Weekly / Monthly / Quarterly / Annual
+  - Custom date range (from/to picker)
+
+STRUCTURE OF THE PRINTED P&L REPORT:
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │              KJP RICEMILL                                           │
+  │         PROFIT & LOSS STATEMENT                                     │
+  │         Period: January 1, 2026 – January 31, 2026                  │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │ REVENUE                                                             │
+  │   Gross Sales Revenue                         ₱ XXX,XXX.XX          │
+  │   Less: Discounts Given                      (₱   X,XXX.XX)         │
+  │   Less: Returns & Refunds                    (₱   X,XXX.XX)         │
+  │   ─────────────────────────────────────────────────────────         │
+  │   NET REVENUE                                 ₱ XXX,XXX.XX          │
+  │                                                                     │
+  │ COST OF GOODS SOLD (COGS)                                           │
+  │   Raw Material Cost (Procurement)            (₱  XX,XXX.XX)        │
+  │   Drying Cost                                (₱   X,XXX.XX)        │
+  │   ─────────────────────────────────────────────────────────        │
+  │   TOTAL COGS                                 (₱  XX,XXX.XX)        │
+  │                                                                     │
+  │ GROSS PROFIT                                  ₱  XX,XXX.XX         │
+  │ GROSS MARGIN %                                       XX.XX%         │
+  │                                                                     │
+  │ OPERATIONAL EXPENSES (if tracked)                                   │
+  │   Delivery Expenses (COD/Driver costs)       (₱   X,XXX.XX)        │
+  │   ─────────────────────────────────────────────────────────        │
+  │   NET PROFIT (ESTIMATED)                      ₱  XX,XXX.XX         │
+  │                                                                     │
+  │ ADDITIONAL METRICS                                                  │
+  │   Total Orders Completed           :  XXX                          │
+  │   Total Orders Returned/Voided     :  XX                           │
+  │   Unpaid Orders (Pay Later/COD)    :  ₱ XX,XXX.XX                  │
+  │   Collection Rate                  :  XX.XX%                       │
+  └─────────────────────────────────────────────────────────────────────┘
+
+DATA SOURCES:
+  - Gross Sales Revenue    : SUM(sales.total)  WHERE status IN
+                             ('delivered', 'completed')
+  - Discounts              : SUM(sales.discount)
+  - Returns                : SUM(sale_items.subtotal) WHERE sale.status
+                             = 'returned'
+  - Procurement Cost       : SUM(procurements.total_cost) within period
+  - Drying Cost            : SUM(drying_processes.total_price) within period
+  - Profit Margin          : Already stored in sales.profit_margin field
+
+
+================================================================================
+4. REPORT #2 — SALES SUMMARY REPORT
+================================================================================
+
+PURPOSE:
+  A detailed breakdown of all sales transactions within a period.
+  Useful for daily/weekly cash reconciliation and sales monitoring.
+
+DATE FILTER: Daily, Weekly, Monthly, Custom Range
+
+CONTENT:
+  - Total number of orders
+  - Revenue breakdown by payment method:
+      Cash        : ₱ XX,XXX.XX   (XX orders)
+      GCash       : ₱ XX,XXX.XX   (XX orders)
+      COD         : ₱ XX,XXX.XX   (XX orders)
+      Pay Later   : ₱ XX,XXX.XX   (XX orders)
+  - Order status breakdown:
+      Delivered   : XX orders
+      Completed   : XX orders
+      Returned    : XX orders
+      Cancelled   : XX orders
+      Voided      : XX orders
+  - Unpaid balance (Pay Later / COD pending)
+  - Top 5 products by revenue in the period
+  - Top 5 customers by spending in the period
+  - List of all transactions (Transaction ID, Customer, Amount, Status, Date)
+
+DATA SOURCES:
+  - sales table (transaction_id, customer_id, total, discount, delivery_fee,
+    payment_method, payment_status, status, created_at)
+  - sale_items table (sale_id, product_id, quantity, unit_price, subtotal)
+  - customers table (name)
+  - products table (name)
+
+WHERE TO PRINT: Reports page + Print button on Sales page
+
+
+================================================================================
+5. REPORT #3 — PROCUREMENT & RAW MATERIAL COST REPORT
+================================================================================
+
+PURPOSE:
+  Shows how much was spent on raw palay (unhusked rice) from suppliers
+  in a given period. Useful for tracking supply chain input costs.
+
+DATE FILTER: Monthly, Quarterly, Annual, Custom Range
+
+CONTENT:
+  - Total procurement batches in period
+  - Total kilograms purchased
+  - Total sacks purchased
+  - Total amount spent (COGS input)
+  - Breakdown by supplier:
+      Supplier Name   | Qty (kg) | Sacks | Price/kg | Total Cost | Date
+  - Breakdown by variety:
+      Variety Name    | Qty (kg) | Total Cost | Avg Price/kg
+  - Average price per kg (to track inflation/supplier pricing trends)
+  - Procurement status summary:
+      Pending / Drying / Dried / Completed / Cancelled
+
+DATA SOURCES:
+  - procurements table (supplier_id, quantity_kg, sacks, price_per_kg,
+    total_cost, variety_id, status, created_at)
+  - suppliers table (name)
+  - varieties table (name)
+  - procurement_batches table (batch_number)
+
+WHERE TO PRINT: Reports page + Print button on Procurement page
+
+
+================================================================================
+6. REPORT #4 — DRYING COST REPORT
+================================================================================
+
+PURPOSE:
+  Shows the total cost incurred from the drying stage across all batches
+  in a period. Drying is a direct operational cost that eats into profit.
+
+DATE FILTER: Monthly, Quarterly, Custom Range
+
+CONTENT:
+  - Total drying batches completed
+  - Total sacks dried
+  - Total days of drying
+  - Total drying cost (sum of all drying expenses)
+  - Average cost per sack
+  - Breakdown per drying record:
+      Batch No. | Sacks | Days | Rate/Sack | Total Cost | Status | Date
+  - Input vs Output quantity comparison (moisture loss tracking):
+      Input kg  vs  Output kg  →  Shrinkage %
+
+DATA SOURCES:
+  - drying_processes table (quantity_kg, sacks, quantity_out, days,
+    price, total_price, status, started_at, dried_at)
+  - procurement_batches table (batch_number)
+  - procurements table (linked via pivot)
+
+  FORMULA:
+    total_price = (sacks × price_per_sack) × days
+    Shrinkage % = ((quantity_kg - quantity_out) / quantity_kg) × 100
+
+WHERE TO PRINT: Reports page + Print button on Drying Process page
+
+
+================================================================================
+7. REPORT #5 — PROCESSING YIELD & EFFICIENCY REPORT
+================================================================================
+
+PURPOSE:
+  Shows how efficiently the milling stage converts dried palay into
+  finished rice. Yield % directly impacts profitability — a lower yield
+  means more raw material is wasted.
+
+DATE FILTER: Monthly, Quarterly, Custom Range
+
+CONTENT:
+  - Total processing records completed
+  - Total input kg (dried rice going in)
+  - Total output kg (finished rice coming out)
+  - Total husk/waste kg
+  - Overall yield percentage
+  - Breakdown per processing record:
+      Processing ID | Input kg | Output kg | Husk kg | Yield % | Operator | Date
+  - Stock distribution after processing (which products received stock)
+  - Cost carried through per kg of output rice
+
+DATA SOURCES:
+  - processings table (input_kg, output_kg, husk_kg, yield_percent,
+    operator_id, status, completed_at)
+  - processing_drying_sources table (pivot: processing_id, drying_id, qty)
+  - processing_outputs table (product_id, quantity_kg distributed)
+  - stock_logs table (tracing stock additions)
+
+  FORMULA:
+    yield_percent = (output_kg / input_kg) × 100
+    husk_percent  = (husk_kg / input_kg) × 100
+
+WHERE TO PRINT: Reports page + Print button on Processing page
+
+
+================================================================================
+8. REPORT #6 — INVENTORY VALUATION REPORT
+================================================================================
+
+PURPOSE:
+  Shows the current value of all rice products in stock — i.e., how much
+  money is "sitting on the shelves" waiting to be sold.
+
+DATE: As of print date (current snapshot, no date range filter needed)
+
+CONTENT:
+  - Per product:
+      Product Name | Variety | Current Stock (bags) | Unit Cost | Unit Price
+      Stock Value (at cost) | Potential Revenue | Potential Profit
+  - Grand totals:
+      Total inventory value at cost       : ₱ XX,XXX.XX
+      Total potential revenue (at selling): ₱ XX,XXX.XX
+      Total potential gross profit        : ₱ XX,XXX.XX
+  - Low stock alerts (items below stock_floor threshold)
+  - Out of stock items list
+
+DATA SOURCES:
+  - products table (name, price, stocks, stock_floor, variety_id)
+  - varieties table (name)
+  - product cost analysis (computed from processing → drying → procurement
+    chain via ProductService::costAnalysis())
+
+  FORMULA:
+    Stock Value at Cost    = stocks × unit_cost_per_bag
+    Potential Revenue      = stocks × selling_price
+    Potential Gross Profit = Potential Revenue - Stock Value at Cost
+
+WHERE TO PRINT: Reports page + Print button on Products page
+
+
+================================================================================
+9. REPORT #7 — ORDER TRANSACTION RECEIPT (Per Order)
+================================================================================
+
+PURPOSE:
+  A printable receipt for each individual customer order.
+  Used for delivery confirmation, customer records, or disputes.
+
+TRIGGER: "Print Receipt" button on each order row in Orders or Sales page
+
+CONTENT:
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                      KJP RICEMILL                                   │
+  │                  OFFICIAL RECEIPT / INVOICE                         │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Transaction ID : TXN-XXXXXXXXXX                                    │
+  │  Date           : April 22, 2026                                    │
+  │  Customer       : Juan dela Cruz                                    │
+  │  Address        : 123 Main St, Cebu City                            │
+  │  Payment Method : Cash / GCash / COD / Pay Later                    │
+  │  Payment Status : PAID / UNPAID                                     │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  ITEMS ORDERED                                                      │
+  │  ─────────────────────────────────────────────────────────────────  │
+  │  Product Name          Qty     Unit Price    Subtotal               │
+  │  Dinorado (25kg bag)     2      ₱1,200.00    ₱2,400.00             │
+  │  Sinandomeng (50kg bag)  1      ₱2,000.00    ₱2,000.00             │
+  │  ─────────────────────────────────────────────────────────────────  │
+  │                              Subtotal:       ₱4,400.00             │
+  │                              Discount:      (₱  400.00)            │
+  │                              Delivery Fee:   ₱  100.00             │
+  │                              ─────────────────────────             │
+  │                              TOTAL:          ₱4,100.00             │
+  │                              Amount Tendered:₱5,000.00             │
+  │                              Change:         ₱  900.00             │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Status: DELIVERED    Delivered on: April 22, 2026                  │
+  │  Driver: [Driver Name]                                              │
+  └─────────────────────────────────────────────────────────────────────┘
+
+DATA SOURCES:
+  - sales table (transaction_id, customer_id, subtotal, discount,
+    delivery_fee, total, payment_method, payment_status, amount_tendered,
+    change_amount, status, created_at)
+  - sale_items table (product_id, quantity, unit_price, subtotal)
+  - customers table (name, address)
+  - delivery_assignments table (driver_id, delivered_at)
+  - users/drivers table (name)
+
+WHERE IT APPEARS: Print button on each order row in Orders page and Sales page
+
+
+================================================================================
+10. HOW PROFIT IS CALCULATED (FORMULA BREAKDOWN)
+================================================================================
+
+The system uses a full supply chain cost trace. Here is the complete path
+from raw material purchase to final profit per sale:
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  STEP 1: PROCUREMENT COST (Raw Material)                             │
+  │    procurement_cost = quantity_kg × price_per_kg                     │
+  │    Example: 5,000 kg × ₱10/kg = ₱50,000                             │
+  │                                                                      │
+  │  STEP 2: DRYING COST                                                 │
+  │    drying_cost = (sacks × price_per_sack) × days                    │
+  │    Example: (100 sacks × ₱5) × 3 days = ₱1,500                      │
+  │                                                                      │
+  │  STEP 3: PROCESSING — COST TRACED (No separate fee)                  │
+  │    fraction = qty_taken / total_dried_kg                             │
+  │    cost_share = fraction × (procurement_cost + drying_cost)          │
+  │    unit_cost = cost_share / output_kg                                │
+  │                                                                      │
+  │  STEP 4: SELLING PRICE (Revenue per unit)                            │
+  │    unit_revenue = selling_price_per_bag                              │
+  │                                                                      │
+  │  STEP 5: PROFIT PER UNIT                                             │
+  │    unit_profit = unit_revenue - unit_cost                            │
+  │                                                                      │
+  │  STEP 6: TOTAL PROFIT (P&L)                                          │
+  │    total_revenue = SUM(sales.total) for completed orders             │
+  │    total_cogs    = SUM(procurement.total_cost)                       │
+  │                  + SUM(drying.total_price)                           │
+  │    gross_profit  = total_revenue - total_cogs                        │
+  │    gross_margin  = (gross_profit / total_revenue) × 100              │
+  └──────────────────────────────────────────────────────────────────────┘
+
+ALREADY STORED IN DATABASE:
+  - sales.profit_margin     → Profit margin % per transaction
+  - sale_items.total_profit → Profit amount per line item
+  - sales.total_cost        → Total cost traced for that sale
+
+The P&L Report reads and aggregates these already-computed values.
+
+
+================================================================================
+11. DATA SOURCES FOR EACH REPORT (DATABASE FIELDS)
+================================================================================
+
+  REPORT                    │ PRIMARY TABLES USED
+  ──────────────────────────┼──────────────────────────────────────────────────
+  P&L Statement             │ sales, sale_items, procurements,
+                            │ drying_processes
+  ──────────────────────────┼──────────────────────────────────────────────────
+  Sales Summary             │ sales, sale_items, customers, products
+  ──────────────────────────┼──────────────────────────────────────────────────
+  Procurement Cost          │ procurements, suppliers, varieties,
+                            │ procurement_batches
+  ──────────────────────────┼──────────────────────────────────────────────────
+  Drying Cost               │ drying_processes, procurement_batches,
+                            │ procurements
+  ──────────────────────────┼──────────────────────────────────────────────────
+  Processing Yield          │ processings, processing_drying_sources,
+                            │ processing_outputs, stock_logs
+  ──────────────────────────┼──────────────────────────────────────────────────
+  Inventory Valuation       │ products, varieties, stock_logs,
+                            │ (cost computed via ProductService)
+  ──────────────────────────┼──────────────────────────────────────────────────
+  Order Receipt             │ sales, sale_items, customers, products,
+                            │ delivery_assignments, users (drivers)
+
+
+================================================================================
+12. IMPLEMENTATION PLAN — WHICH PAGE TO ADD EACH REPORT
+================================================================================
+
+NEW PAGE:
+  Page Name     : Reports
+  Route         : /admin/reports
+  Sidebar Icon  : DocumentChartBarIcon (Heroicons)
+  Access        : admin, super_admin only
+  Tabs on Page  :
+    - Profit & Loss
+    - Sales Summary
+    - Procurement Costs
+    - Drying Costs
+    - Processing Yields
+    - Inventory Valuation
+
+  Each tab has:
+    - Date range filter (period selector + custom from/to)
+    - Summary cards showing key numbers
+    - Data table with line-by-line breakdown
+    - "Print Report" button → opens browser print dialog
+    - "Export CSV" button → downloads spreadsheet
+
+PRINT BUTTONS TO ADD ON EXISTING PAGES:
+  Page            │ Button Label          │ Report Generated
+  ────────────────┼───────────────────────┼──────────────────────────────
+  Sales           │ Print Sales Report    │ Sales Summary for current filter
+  Orders          │ Print Receipt         │ Order Receipt per row
+  Procurement     │ Print Cost Report     │ Procurement Cost for period
+  Drying Process  │ Print Drying Report   │ Drying Cost for period
+  Processing      │ Print Yield Report    │ Processing Yield for period
+  Products        │ Print Inventory       │ Inventory Valuation snapshot
+
+BACKEND (Laravel) — New API Endpoints Needed:
+  GET /api/reports/profit-loss?from=&to=       → P&L data
+  GET /api/reports/sales-summary?from=&to=     → Sales summary data
+  GET /api/reports/procurement-costs?from=&to= → Procurement cost data
+  GET /api/reports/drying-costs?from=&to=      → Drying cost data
+  GET /api/reports/processing-yields?from=&to= → Processing yield data
+  GET /api/reports/inventory-valuation         → Current inventory value
+
+  Controller: ReportController.php
+  Route file: routes/api.php
+
+
+================================================================================
+QUICK REFERENCE — IS THE BUSINESS PROFITABLE?
+================================================================================
+
+  To know if KJP Ricemill made a profit in a given month:
+
+    1. Open Reports page → Profit & Loss tab
+    2. Set period to the desired month
+    3. Look at GROSS PROFIT line
+       - If POSITIVE (green)  → Business made money that month ✓
+       - If NEGATIVE (red)    → Business operated at a loss that month ✗
+    4. Look at GROSS MARGIN %
+       - Industry target for rice milling: 15%–30% margin
+       - Below 10% → costs are eating into profit, investigate procurement prices
+       - Above 30% → very healthy, business is performing well
+
+  The data for this calculation already exists in the database.
+  No new data collection is needed — only a Reports page to display it.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

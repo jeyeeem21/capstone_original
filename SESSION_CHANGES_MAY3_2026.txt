@@ -1,0 +1,196 @@
+================================================================================
+CHANGES MADE — SESSION SUMMARY (May 3, 2026)
+Replicate these in the original system.
+================================================================================
+
+================================================================================
+1. BUG FIX — Total Cost / Profit always ₱0 in Sales page
+================================================================================
+
+FILE: app/Http/Resources/SaleResource.php
+
+Problem:
+  Product model uses `product_id` as primary key (not `id`).
+  Code was doing `$product->id` which returns null in Laravel when
+  the primary key column is not literally named `id`.
+
+Fix:
+  Change every occurrence of:
+    $avgCosts[$product->id]
+  To:
+    $avgCosts[$product->getKey()]
+
+  `getKey()` resolves the model's actual primary key regardless of column name.
+
+================================================================================
+2. BUG FIX — Duplicate Transaction ID error on new orders
+================================================================================
+
+FILE: app/Services/SaleService.php  (inside createOrder method)
+
+Problem:
+  Transaction ID was generated using COUNT(*) of all orders this year.
+  If any order was voided/deleted, the count no longer matches the highest
+  used sequence number, causing duplicate ID collisions.
+
+Old code:
+  $count = Sale::whereYear('created_at', $year)->count() + 1;
+
+New code:
+  $lastTxn = Sale::whereYear('created_at', $year)
+      ->where('transaction_id', 'like', 'ORD-' . $year . '%')
+      ->orderByRaw('CAST(SUBSTRING_INDEX(transaction_id, "-", -1) AS UNSIGNED) DESC')
+      ->value('transaction_id');
+  $lastSeq = $lastTxn ? (int) substr($lastTxn, strrpos($lastTxn, '-') + 1) : 0;
+  $count = $lastSeq + 1;
+
+  This finds the highest existing sequence number and increments it,
+  so it never collides even if orders are voided or gaps exist.
+
+================================================================================
+3. FEATURE — Perpetual Weighted Average Cost (PWAC) for profit calculation
+================================================================================
+
+WHAT IT FIXES:
+  The old method averaged ALL historical batch costs (including already-sold
+  stock), which distorted profit when input prices changed over time.
+  PWAC only uses remaining stock at the time of each new distribution,
+  and locks in the cost per sale at the exact moment the sale was placed.
+
+--- STEP 1: New migration ---
+
+FILE: database/migrations/2026_05_03_000001_add_running_avg_cost_to_stock_logs.php (new file)
+
+  - Adds `running_avg_cost` decimal(14,4) nullable column to stock_logs table
+  - Backfills existing IN logs chronologically per product using PWAC formula:
+      running_avg = ((qty_before * prev_avg) + total_cost_of_batch) / (qty_before + new_units)
+
+  Run: php artisan migrate
+
+--- STEP 2: Update StockLog model ---
+
+FILE: app/Models/StockLog.php
+
+  Add to $fillable array:
+    'running_avg_cost',
+
+  Add to $casts array:
+    'running_avg_cost' => 'decimal:4',
+
+  (Insert after 'cost_per_unit' in both arrays)
+
+--- STEP 3: Compute and store PWAC on each distribution ---
+
+FILE: app/Services/ProductService.php  (inside distributeProcessing, after $costPerUnit is computed)
+
+  Add this block BEFORE StockLog::create():
+
+    // Compute Perpetual Weighted Average Cost (PWAC):
+    $prevLog = StockLog::where('product_id', $product->product_id)
+        ->where('type', 'in')
+        ->whereNotNull('running_avg_cost')
+        ->orderByDesc('created_at')
+        ->first();
+    $prevRunningAvg = $prevLog ? (float) $prevLog->running_avg_cost : 0;
+    $totalUnitsAfter = $stockBefore + $totalUnits;
+    $runningAvgCost = $totalUnitsAfter > 0
+        ? round(($stockBefore * $prevRunningAvg + $totalCost) / $totalUnitsAfter, 4)
+        : 0;
+
+  Then inside StockLog::create(), add after 'cost_per_unit':
+    'running_avg_cost' => $runningAvgCost,
+
+--- STEP 4: Rewrite SaleResource to use PWAC per sale date ---
+
+FILE: app/Http/Resources/SaleResource.php
+
+  Replace the static $avgCosts property and preloadAvgCosts() method
+  with the following:
+
+    // --- replace from here ---
+    private static ?array $pwacLogs = null;
+
+    public static function preloadAvgCosts(): void
+    {
+        $rows = StockLog::where('type', 'in')
+            ->whereNotNull('running_avg_cost')
+            ->where('running_avg_cost', '>', 0)
+            ->orderBy('created_at')
+            ->select('product_id', 'created_at', 'running_avg_cost')
+            ->get();
+
+        self::$pwacLogs = [];
+        foreach ($rows as $row) {
+            self::$pwacLogs[$row->product_id][] = [
+                'created_at'       => $row->created_at,
+                'running_avg_cost' => (float) $row->running_avg_cost,
+            ];
+        }
+    }
+
+    private static function getPwacCostForSale(int $productId, $saleDate): float
+    {
+        $logs = self::$pwacLogs[$productId] ?? [];
+        $matched = null;
+        foreach ($logs as $log) {
+            if ($log['created_at'] <= $saleDate) {
+                $matched = $log;
+            } else {
+                break;
+            }
+        }
+        return $matched ? $matched['running_avg_cost'] : 0;
+    }
+    // --- replace to here ---
+
+  In toArray():
+    - Change: if (self::$avgCosts === null)
+      To:     if (self::$pwacLogs === null)
+
+    - Add above $items = ...:
+        $saleDate = $this->created_at;
+
+    - Change closure parameter from: function ($item)
+      To:                            function ($item) use ($saleDate)
+
+    - Change cost lookup from:
+        $avgCostPerUnit = self::$avgCosts[$product->getKey()] ?? 0;
+      To:
+        $avgCostPerUnit = self::getPwacCostForSale($product->getKey(), $saleDate);
+
+================================================================================
+4. UI — Remove "Profit" column from Sales Records table
+================================================================================
+
+FILE: react_frontend/src/pages/admin/Sales/Sales.jsx
+
+  In the columns array, remove the entire column entry:
+    { header: 'Profit', accessor: 'total_profit', cell: (row) => { ... } },
+
+  (The entry between the 'Amount' column and the 'Payment' column)
+
+================================================================================
+5. UI — Remove "Total Cost" stat card from Sales Overview
+================================================================================
+
+FILE: react_frontend/src/pages/admin/Sales/Sales.jsx
+
+  In the stats cards section, remove:
+    <StatsCard label="Total Cost" value={...} unit="production cost" ... />
+
+  Also change the grid columns class from:
+    lg:grid-cols-5
+  To:
+    lg:grid-cols-4
+
+================================================================================
+NOTES
+================================================================================
+
+- All backend changes are in the Laravel API (laravel_backend/)
+- All frontend changes are in the React app (react_frontend/)
+- After replicating, run: php artisan migrate
+- No seeder changes needed
+- The PWAC migration includes automatic backfill of existing stock log data
+
+================================================================================

@@ -1,0 +1,1019 @@
+================================================================================
+         KJP RICEMILL — ADMIN & SUPER ADMIN PAGE FUNCTIONS DOCUMENTATION
+================================================================================
+                          Last Updated: March 10, 2026
+================================================================================
+
+
+TABLE OF CONTENTS
+-----------------
+  1. System Overview & Role Differences
+  2. Sidebar Navigation
+  3. Dashboard
+  4. Procurement
+  5. Drying Process
+  6. Processing (Milling)
+  7. Products
+  8. Varieties
+  9. Inventory
+ 10. Point of Sale (POS)
+ 11. Orders
+ 12. Partners (Overview)
+ 13. Supplier
+ 14. Customer
+ 15. Staff Management
+ 16. Sales
+ 17. Settings
+ 18. Admin Accounts
+ 19. Audit Trail
+ 20. Archives
+
+
+================================================================================
+1. SYSTEM OVERVIEW & ROLE DIFFERENCES
+================================================================================
+
+The KJP Ricemill system has 5 user roles:
+  - Super Admin    → Full system control (all features)
+  - Admin          → Operational management (limited settings, no archive/delete)
+  - Staff          → POS access + staff dashboard
+  - Driver         → Delivery management (to be documented later)
+  - Client         → Online shop, ordering, cart (to be documented later)
+
+SUPER ADMIN vs ADMIN — Key Differences:
+┌──────────────────────────────────────┬──────────────┬──────────────┐
+│ Feature                              │ Super Admin  │ Admin        │
+├──────────────────────────────────────┼──────────────┼──────────────┤
+│ Dashboard                            │ Full access  │ Full access  │
+│ Procurement — Add/Edit               │ ✓            │ ✓            │
+│ Procurement — Archive/Delete         │ ✓            │ ✗            │
+│ Drying Process — Full control        │ ✓            │ ✓            │
+│ Processing — Full control            │ ✓            │ ✓            │
+│ Products — Add/Edit                  │ ✓            │ ✓            │
+│ Products — Archive/Delete            │ ✓            │ ✗            │
+│ Inventory — Add/Edit                 │ ✓            │ ✓            │
+│ Inventory — Archive/Delete           │ ✓            │ ✗            │
+│ Point of Sale                        │ ✓            │ ✓            │
+│ Orders — Full management             │ ✓            │ ✓            │
+│ Supplier — Add/Edit                  │ ✓            │ ✓            │
+│ Supplier — Archive/Delete            │ ✓            │ ✗            │
+│ Customer — Add/Edit                  │ ✓            │ ✓            │
+│ Customer — Archive/Delete            │ ✓            │ ✗            │
+│ Staff Management — Manage all        │ ✓            │ Limited      │
+│ Sales — View + Void                  │ ✓            │ View only    │
+│ Settings — Profile & Security        │ ✓            │ ✓            │
+│ Settings — General (Business Info)   │ ✓            │ ✗            │
+│ Settings — Appearance (Theme)        │ ✓            │ ✗            │
+│ Settings — Information (Website CMS) │ ✓            │ ✗            │
+│ Settings — Data (Backup/Export)      │ ✓            │ ✗            │
+│ Settings — Admin Accounts            │ ✓            │ ✗            │
+│ Settings — Audit Trail               │ ✓            │ ✗            │
+│ Settings — Archives                  │ ✓            │ ✗            │
+└──────────────────────────────────────┴──────────────┴──────────────┘
+
+
+================================================================================    
+2. SIDEBAR NAVIGATION
+================================================================================
+
+Both Super Admin and Admin see the same sidebar menu. The base path changes
+depending on role: /superadmin/* or /admin/*
+
+Menu Items:
+┌────┬──────────────────┬─────────────────────────────────────────────┐
+│ #  │ Label            │ Route                                       │
+├────┼──────────────────┼─────────────────────────────────────────────┤
+│ 1  │ Dashboard        │ {basePath}/dashboard                        │
+│ 2  │ Procurement      │ {basePath}/procurement                      │
+│ 3  │ Drying           │ {basePath}/drying                           │
+│ 4  │ Processing       │ {basePath}/processing                       │
+│ 5  │ Products         │ {basePath}/products                         │
+│    │   └─ Varieties   │ {basePath}/products/varieties               │
+│    │   └─ Inventory   │ {basePath}/products/inventory               │
+│ 6  │ Point of Sale    │ {basePath}/pos                              │
+│ 7  │ Orders           │ {basePath}/orders                           │
+│ 8  │ Partners         │ {basePath}/partners                         │
+│    │   └─ Supplier    │ {basePath}/partners/supplier                │
+│    │   └─ Customer    │ {basePath}/partners/customer                │
+│ 9  │ Staff Management │ {basePath}/staff-management                 │
+│ 10 │ Sales            │ {basePath}/sales                            │
+│ 11 │ Settings         │ {basePath}/settings                         │
+└────┴──────────────────┴─────────────────────────────────────────────┘
+
+Note: Audit Trail and Archives are NOT separate sidebar items — they are
+embedded as tabs/sections within the Settings page (Super Admin only).
+
+
+================================================================================
+3. DASHBOARD
+================================================================================
+
+URL:        /superadmin/dashboard  OR  /admin/dashboard
+Access:     Both Admin and Super Admin
+API:        None connected yet (placeholder data)
+
+Description:
+  The main overview page showing key business performance metrics and charts.
+  Provides a quick snapshot of the ricemill's operations at a glance.
+
+Functions & Features:
+  • Stats Cards (4 cards displayed):
+      - Total Input (kg palay)
+      - Total Output (kg rice)
+      - Average Yield (%)
+      - Total Records (entries)
+
+  • Line Chart — Input vs Output Trends:
+      - Period toggle: Daily / Monthly / Yearly
+      - Summary stats: Total Output, Avg per Day, Growth %
+
+  • Donut Chart — Processing Breakdown:
+      - Shows output vs waste distribution
+
+  • Recent Sales Table:
+      - Columns: Invoice, Customer, Date, Amount, Status
+      - Searchable and filterable by status
+
+  • Skeleton loaders during data loading
+
+
+================================================================================
+4. PROCUREMENT
+================================================================================
+
+URL:        /superadmin/procurement  OR  /admin/procurement
+Access:     Both Admin and Super Admin
+            Archive/Delete button is Super Admin ONLY
+API:        GET /procurements
+            GET /suppliers
+            GET /varieties
+            GET /procurement-batches
+            POST /procurements
+            PUT /procurements/:id
+            DELETE /procurements/:id
+
+Description:
+  Manages palay (unhusked rice) procurement records from suppliers. Supports
+  batch grouping for organized procurement and sending to drying process.
+  One of the largest pages in the system (~2,270 lines).
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new procurement record
+      - View procurement details (double-click row)
+      - Edit existing procurement
+      - Delete/archive procurement (Super Admin only)
+
+  • Add Procurement Form Fields:
+      - Supplier (combobox with search + "add new supplier" inline option)
+      - Quantity in kg
+      - Number of sacks
+      - Price per kg
+      - Description/notes
+      - Status
+      - Batch assignment (optional)
+
+  • Batch Management:
+      - Toggle between "Records" and "Batches" table views
+      - Create new procurement batches with notes
+      - Filter records by batch
+      - View batch details in modal
+      - Batch summary showing total sacks, kg, cost
+
+  • Send to Drying:
+      - Send individual procurement to drying process
+      - Send entire batch to drying process
+      - Specify sacks and price per kg for drying
+      - Batch preview before sending
+
+  • New Supplier Inline Creation:
+      - While adding procurement, create a new supplier on-the-fly
+
+  • Remarks Edit:
+      - For already-dried procurements, only remarks/description can be edited
+
+  • Charts:
+      - Line chart with Daily/Monthly/Yearly period toggle
+      - Donut chart for procurement breakdown
+
+  • Stats Cards showing procurement summary metrics
+  • Data table with search, sort, and pagination
+  • Skeleton loaders during initial load
+
+
+================================================================================
+5. DRYING PROCESS
+================================================================================
+
+URL:        /superadmin/drying  OR  /admin/drying
+Access:     Both Admin and Super Admin
+API:        GET /drying-processes
+            GET /procurements
+            GET /procurement-batches
+            POST /drying-processes
+            DELETE /drying-processes/:id
+
+Description:
+  Tracks the drying of procured palay. Supports both individual procurement
+  and batch-based drying sources. Manages the day-by-day drying progress.
+
+Functions & Features:
+  • Add Drying Process:
+      - Toggle source: Individual Procurement OR Batch
+      - Select procurement or batch to dry
+      - Specify sacks, quantity in kg, price
+      - Batch preview before submission
+
+  • Drying Progress Tracking:
+      - Increment Day: Track daily drying progress (Day 1, 2, 3...)
+      - Mark as Dried: Complete the drying process when ready
+
+  • View Details:
+      - Modal showing full drying process information
+
+  • Delete/Archive:
+      - Returns the drying record back to procurement status
+
+  • Batch Filter:
+      - Filter drying records by batch
+
+  • Charts:
+      - Line chart with Daily/Monthly/Yearly period toggle
+      - Donut chart for drying status breakdown
+
+  • Stats Cards showing drying summary statistics
+  • Data table with search, sort, and action buttons
+  • Skeleton loaders
+
+
+================================================================================
+6. PROCESSING (MILLING)
+================================================================================
+
+URL:        /superadmin/processing  OR  /admin/processing
+Access:     Both Admin and Super Admin
+API:        GET /processings/active
+            GET /processings/completed
+            GET /drying-processes
+            POST /processings
+            PUT /processings/:id
+            DELETE /processings/:id
+
+Description:
+  Manages rice milling/processing operations — converting dried palay into
+  finished rice products. Supports a workflow from pending → active → completed.
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new processing record
+      - View processing details (modal)
+      - Edit processing record
+      - Delete/archive processing
+
+  • Processing Workflow:
+      - Pending → Start Processing (begins milling)
+      - Active → Complete Processing (enter output quantities)
+      - Completed → Return to Processing (revert if needed)
+
+  • Multi-select Drying Sources:
+      - Select multiple dried items as inputs for one processing run
+
+  • Complete Processing Form:
+      - Output in kg
+      - Husk in kg
+      - Yield percentage (auto-calculated)
+
+  • Two Separate Tables:
+      - Active Processings table
+      - Completed Processings table
+
+  • Context-aware Action Buttons:
+      - Pending: Edit, Archive
+      - Active: Start, Complete
+      - Completed: Return to Processing
+
+  • Charts:
+      - Line chart with Daily/Monthly/Yearly period toggle
+      - Donut chart for processing breakdown
+
+  • Stats Cards: Total input, output, yield %, records count
+  • Skeleton loaders
+
+
+================================================================================
+7. PRODUCTS
+================================================================================
+
+URL:        /superadmin/products  OR  /admin/products
+Access:     Both Admin and Super Admin
+            Archive/Delete is Super Admin ONLY
+API:        GET /products
+            GET /varieties
+            POST /products
+            PUT /products/:id
+            DELETE /products/:id
+
+Description:
+  Manages the rice product catalog — defines products with variety, pricing,
+  and weight information.
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new product
+      - View product details
+      - Edit existing product
+      - Delete/archive product (Super Admin only)
+
+  • Product Form Fields:
+      - Product name
+      - Variety (dropdown, only shows Active varieties)
+      - Price
+      - Weight
+      - Image upload (file picker, stored in storage/products/)
+      - Status (Active/Inactive)
+
+  • Cost Analysis:
+      - Fetches and displays cost analysis data per product
+
+  • Product Variety Linking:
+      - Each product is linked to a rice variety
+
+  • Stats Cards: Product summary statistics
+  • Data table with search and sort
+  • Skeleton loaders
+
+
+================================================================================
+8. VARIETIES
+================================================================================
+
+URL:        /superadmin/products/varieties  OR  /admin/products/varieties
+Access:     Both Admin and Super Admin
+API:        GET /varieties
+            POST /varieties
+            PUT /varieties/:id
+            DELETE /varieties/:id
+
+Description:
+  Manages rice variety definitions (e.g., Sinandomeng, Jasmine, Dinorado)
+  with color-coded labels for visual identification across the system.
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new variety
+      - View variety details
+      - Edit variety (name, description, color, status)
+      - Delete/archive variety
+
+  • Variety Form Fields:
+      - Name
+      - Description
+      - Color (with interactive color picker)
+      - Status (Active / Inactive)
+
+  • Color Presets:
+      - 8 predefined colors for quick selection:
+        Green, Blue, Yellow, Orange, Red, Purple, Pink, Cyan
+
+  • Stats Cards: Variety counts (total, active, inactive)
+  • Data table with search and sort
+  • Skeleton loaders
+
+
+================================================================================
+9. INVENTORY
+================================================================================
+
+URL:        /superadmin/products/inventory  OR  /admin/products/inventory
+Access:     Both Admin and Super Admin
+            Archive/Delete is Super Admin ONLY
+API:        GET /products
+            GET /varieties
+            GET /processings/completed
+            GET /stock-logs
+            GET /sales
+            GET /products/:id/cost-analysis
+            GET /products/:id/completed-processings
+            POST /products
+            PUT /products/:id
+            DELETE /products/:id
+
+Description:
+  Comprehensive inventory management with stock tracking, movement logs,
+  growth analysis, and cost records. The largest page in the system with
+  4 tabs (~2,234 lines).
+
+Functions & Features:
+  • 4 Tab Views:
+      1. INVENTORY — Main product stock table with CRUD
+      2. IN / OUT — Stock movement chart (ins and outs over time)
+      3. GROWTH ANALYSIS — Sales-based growth over time
+      4. COST RECORDS — Cost analysis per product
+
+  • CRUD Operations (Inventory tab):
+      - Add new product to inventory
+      - View product with cost analysis
+      - Edit product with cost analysis
+      - Delete/archive product (Super Admin only)
+
+  • Add Stock:
+      - Modal to add stock from completed processings
+      - Select individual processings as stock source
+      - Specify kg per processing
+      - Select-all / Reset functionality
+
+  • Set Stock Floor:
+      - Modal to set minimum stock threshold per product
+      - Alerts when stock falls below floor
+
+  • Cost Analysis:
+      - Auto-fetches unit cost breakdown on view/edit
+      - Shows procurement cost, drying cost, processing cost, total
+
+  • Charts (tabs 2-4):
+      - Bar chart for stock movements (In / Out)
+      - Line chart for growth analysis
+      - All with Daily / Monthly / Yearly period toggle
+      - Donut chart for breakdown
+      - Interactive chart point filtering
+
+  • Stats Cards: Inventory summary metrics
+  • Skeleton loaders
+
+
+================================================================================
+10. POINT OF SALE (POS)
+================================================================================
+
+URL:        /superadmin/pos  OR  /admin/pos  OR  /staff/pos
+            Also accessible via /pos (auto-redirects based on role)
+Access:     Super Admin, Admin, AND Staff (shared page)
+API:        GET /products
+            GET /sales
+            GET /varieties
+            POST /sales/order
+            POST /sales/:id/void
+
+Description:
+  Real-time point-of-sale interface for processing walk-in and order
+  transactions. The primary transaction-creation interface. Shared across
+  all internal roles.
+
+Functions & Features:
+  • Product Grid:
+      - Searchable product cards
+      - Filterable by rice variety
+      - Displays: Product name, price, stock level, variety badge
+      - Click a product card to add to cart
+      - Shows all active products including 0-stock items
+
+  • Cart Management:
+      - Add products to cart (click product card)
+      - Update quantity with +/- buttons
+      - Remove individual items
+      - Running total and item count displayed
+      - Mobile-responsive collapsible cart panel
+
+  • Payment Processing:
+      - Cash: Enter cash tendered amount, auto-calculate change
+      - GCash: Enter reference number
+      - COD: Cash on Delivery option
+
+  • Payment Modal:
+      - Validates payment amounts before processing
+      - Shows order summary (items, quantities, total)
+      - Sends complete order payload to API
+      - Validates stock availability before submission
+
+  • Sale Complete Modal (Receipt):
+      - Receipt-style summary after successful sale
+      - Shows: Transaction ID, items, quantities, total, payment details
+      - Displays change amount for cash payments
+
+  • Void Transaction:
+      - Search and select completed transactions from today
+      - Enter void reason
+      - Processes refund and restores stock levels
+
+  • Today's Stats Cards (4):
+      - Today's Sales (total revenue)
+      - Transactions (order count)
+      - Items Sold (unit count)
+      - Avg Transaction (average order value)
+
+  • Recent Transactions List:
+      - Shows today's transactions
+      - Columns: ID, Time, Total, Items, Payment Method, Status
+
+  • Real-time Stock Refresh:
+      - Stock levels refresh after each transaction
+
+
+================================================================================
+11. ORDERS
+================================================================================
+
+URL:        /superadmin/orders  OR  /admin/orders
+Access:     Both Admin and Super Admin
+API:        GET /sales
+            PUT /sales/:id/status
+            POST /sales/:id/return
+
+Description:
+  Order management pipeline — tracks in-progress orders from pending through
+  delivery, with cancel and return workflows.
+
+Functions & Features:
+  • Order Status Pipeline:
+      Pending → Processing → Shipped → Delivered
+      (One-click status advancement buttons)
+
+  • Status Tab Filters:
+      All, Pending, Processing, Shipped, Delivered,
+      Return Requested, Returned, Cancelled
+      (Color-coded tab buttons with counts)
+
+  • Process Order:
+      - Move order from Pending → Processing
+
+  • Ship Order:
+      - Move order from Processing → Shipped
+
+  • Deliver Order:
+      - Move order from Shipped → Delivered
+
+  • Cancel Order:
+      - Confirm modal to cancel an order
+      - Stock is automatically restored
+
+  • Return Order (Full Flow):
+      - Request Return: Modal with return_reason, return_notes,
+        return_proof (multi-image upload)
+      - Accept Return: Assign pickup driver, plate number,
+        estimated pickup date
+      - Reject Return: Reverts order status to delivered
+      - Mark as Returned: Pickup complete, stock restored
+
+  • Restock Items:
+      - Per-item quantity selection for restocking after void/return
+      - Each item tracks `restocked` status to prevent double-restock
+
+  • Record Payment:
+      - Mark unpaid orders as paid (cash or GCash + proof upload)
+      - Payment proof stored as JSON array of image paths
+
+  • View Order Details:
+      - Modal showing all order items, totals, customer info
+
+  • Stats Cards:
+      - Total Revenue (from delivered orders)
+      - Pending Orders count
+      - Delivered Orders count
+      - Total Items
+
+  • Charts:
+      - Line chart: Revenue trends over time
+      - Donut charts: Status breakdown, Payment method breakdown
+
+  • Data Table:
+      Columns: Order ID, Customer, Items, Total, Payment, Date, Status, Actions
+      Action buttons are context-aware based on current order status
+
+  • Skeleton loaders
+
+
+================================================================================
+12. PARTNERS (OVERVIEW)
+================================================================================
+
+URL:        /superadmin/partners  OR  /admin/partners
+Access:     Both Admin and Super Admin
+API:        GET /customers
+            GET /suppliers
+
+Description:
+  Overview/landing page for partner management. Shows summary statistics
+  for suppliers and customers with quick navigation to sub-pages.
+
+Functions & Features:
+  • Stats Cards (4):
+      - Total Partners (combined)
+      - Total Suppliers
+      - Total Customers
+      - Active Partners count
+
+  • Section Cards:
+      - Supplier card → navigates to Supplier sub-page
+      - Customer card → navigates to Customer sub-page
+
+  • Donut Chart:
+      - Partner breakdown (Suppliers vs Customers)
+
+  • Recent Partners Table:
+      - Combined table of 10 most recent suppliers + customers
+      - Columns: Name, Type (color-coded badge), Contact, Phone, Status
+      - Clickable rows navigate to the respective sub-page
+
+  • Skeleton loaders
+
+
+================================================================================
+13. SUPPLIER
+================================================================================
+
+URL:        /superadmin/partners/supplier  OR  /admin/partners/supplier
+Access:     Both Admin and Super Admin
+            Archive/Delete controls use isSuperAdmin check
+API:        GET /suppliers
+            GET /procurements
+            POST /suppliers
+            PUT /suppliers/:id
+            DELETE /suppliers/:id
+            POST /suppliers/check-email
+
+Description:
+  Full CRUD management for suppliers. Tracks suppliers who provide palay
+  (unhusked rice) to the ricemill.
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new supplier
+      - View supplier details (including procurement history)
+      - Edit supplier information
+      - Delete/archive supplier (Super Admin only)
+
+  • Supplier Form Fields:
+      - Name
+      - Contact person
+      - Phone number
+      - Email address
+      - Address
+      - Status (Active / Inactive)
+
+  • Email Uniqueness Check:
+      - Debounced async validation (500ms delay)
+      - Calls POST /suppliers/check-email
+      - Shows inline error if email already exists
+
+  • Procurement kg Tracking:
+      - Calculates total kg procured per supplier from procurement data
+      - Displayed in supplier details/table
+
+  • Stats Cards: Total suppliers, active/inactive counts, procurement volume
+  • Data table with search and sort
+  • Skeleton loaders
+
+
+================================================================================
+14. CUSTOMER
+================================================================================
+
+URL:        /superadmin/partners/customer  OR  /admin/partners/customer
+Access:     Both Admin and Super Admin
+            Archive/Delete controls use isSuperAdmin check
+API:        GET /customers
+            POST /customers
+            PUT /customers/:id
+            DELETE /customers/:id
+            POST /customers/check-email
+
+Description:
+  Full CRUD management for customers. Tracks the ricemill's customer base.
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new customer
+      - View customer details
+      - Edit customer information
+      - Delete/archive customer (Super Admin only)
+
+  • Customer Form Fields:
+      - Name
+      - Contact person
+      - Phone number
+      - Email address
+      - Address
+      - Status (Active / Inactive)
+
+  • Email Uniqueness Check:
+      - Debounced async validation (500ms delay)
+      - Calls POST /customers/check-email
+      - Shows inline error if email already exists
+
+  • Stats Cards: Total customers, active/inactive counts
+  • Data table with search and sort
+  • Skeleton loaders
+
+
+================================================================================
+15. STAFF MANAGEMENT
+================================================================================
+
+URL:        /superadmin/staff-management  OR  /admin/staff-management
+Access:     Both Admin and Super Admin
+            Super Admin can manage all roles; Admin is limited
+API:        GET /users?role=staff
+            POST /users
+            PUT /users/:id
+            DELETE /users/:id
+
+Description:
+  Manages staff accounts with credentials, positions, and hiring information.
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new staff member
+      - Edit staff member details
+      - Delete/archive staff member
+
+  • Staff Form Fields:
+      - Full name
+      - Position (Secretary / Driver)
+      - Email address
+      - Phone number
+      - Date hired
+      - Status (Active / Inactive)
+      - Password (for login credentials)
+
+  • Position Options:
+      - Secretary
+      - Driver
+
+  • Role-based Access:
+      - Super Admin: Can manage all staff roles
+      - Admin: Limited to certain staff operations
+
+  • Stats Cards: Staff summary counts
+  • Data table with search, sort, and status badges
+  • Skeleton loaders
+
+
+================================================================================
+16. SALES
+================================================================================
+
+URL:        /superadmin/sales  OR  /admin/sales
+Access:     Both Admin and Super Admin
+API:        GET /sales
+
+Description:
+  Read-only view of completed sales/transactions. Sales are created through
+  the POS or online orders — this page only displays and filters them.
+
+Functions & Features:
+  • VIEW ONLY (no create/edit/delete):
+      - Sales are created from the POS terminal or online orders
+      - This page is for reporting and review
+
+  • Status Tab Filters:
+      - All
+      - Delivered (green)
+      - Returned (purple)
+      - Cancelled (orange)
+      - Voided (red)
+      Each tab shows a count badge
+
+  • View Sale Details:
+      - Modal showing full sale information with line items
+
+  • Stats Cards:
+      - Total Revenue
+      - Total Items Sold
+      - Average Transaction Value
+
+  • Charts:
+      - Line chart: Revenue trends (Daily / Monthly / Yearly toggle)
+      - Donut chart: Status/payment method breakdown
+
+  • Data Table:
+      Columns: Invoice, Customer, Items, Total, Payment, Date, Status
+      Searchable, sortable, with date range filter
+
+  • Skeleton loaders
+
+
+================================================================================
+17. SETTINGS
+================================================================================
+
+URL:        /superadmin/settings  OR  /admin/settings
+Access:     Both, but sections are role-gated
+API:        Various (see each section below)
+
+Description:
+  Comprehensive settings hub with multiple sections. Super Admin sees ALL
+  sections; regular Admin sees only Profile and Security. This page also
+  embeds the Audit Trail and Archives components.
+
+Settings Sections:
+┌──────────────────┬──────────────┬──────────────┐
+│ Section          │ Super Admin  │ Admin        │
+├──────────────────┼──────────────┼──────────────┤
+│ General          │ ✓            │ ✗            │
+│ Profile          │ ✓            │ ✓            │
+│ Security         │ ✓            │ ✓            │
+│ Appearance       │ ✓            │ ✗            │
+│ Information      │ ✓            │ ✗            │
+│ Data             │ ✓            │ ✗            │
+│ Accounts         │ ✓            │ ✗            │
+│ Audit Trail      │ ✓            │ ✗            │
+│ Archives         │ ✓            │ ✗            │
+└──────────────────┴──────────────┴──────────────┘
+
+  A) GENERAL SECTION (Super Admin only):
+      API: GET/PUT /business-settings
+      - Business name
+      - Tagline
+      - Email address
+      - Phone number
+      - Physical address
+      - Operating days and hours (open time, close time)
+      - Footer: tagline, copyright text, powered by text
+      - Social media links: Facebook, Twitter, Instagram, LinkedIn
+      - Logo upload with preview
+      - All changes are cached in localStorage for instant display
+
+  B) PROFILE SECTION (Both roles):
+      - First name
+      - Last name
+      - Email address
+      - Phone number
+      - Role display (read-only)
+
+  C) SECURITY SECTION (Both roles):
+      - Current password (required for verification)
+      - New password
+      - Confirm new password
+      - Password change functionality
+
+  D) APPEARANCE SECTION (Super Admin only):
+      - Theme customization with color pickers
+      - Primary color, secondary color, button color
+      - Font size sliders
+      - Dark/Light mode toggle
+      - Custom CSS input
+
+  E) INFORMATION SECTION (Super Admin only):
+      API: GET/PUT /website-content
+      - Website content management (CMS-like editing)
+      - Home page content
+      - About page content
+      - Hero image upload
+
+  F) DATA SECTION (Super Admin only):
+      - Backup and export functions
+
+  G) ACCOUNTS SECTION (Super Admin only):
+      - Embeds the AdminAccounts component (see section 18)
+
+  H) AUDIT TRAIL SECTION (Super Admin only):
+      - Embeds the AuditTrail component (see section 19)
+
+  I) ARCHIVES SECTION (Super Admin only):
+      - Embeds the Archives component (see section 20)
+
+  • Sidebar-style section navigation with icons and descriptions
+  • Responsive layout for mobile
+
+
+================================================================================
+18. ADMIN ACCOUNTS
+================================================================================
+
+URL:        Embedded within Settings → Accounts section
+Access:     Super Admin ONLY
+API:        GET /users?role=admin
+            POST /users
+            PUT /users/:id
+            DELETE /users/:id
+
+Description:
+  Manages admin-level user accounts. Only accessible by the Super Admin
+  through the Settings page.
+
+Functions & Features:
+  • CRUD Operations:
+      - Add new admin account
+      - Edit admin account details
+      - Delete admin account
+
+  • Admin Account Form Fields:
+      - Full name
+      - Email address
+      - Phone number
+      - Password
+      - Status (Active / Inactive)
+
+  • Stats Cards: Admin account counts (total, active, inactive)
+  • Data table with search, sort, and status badges
+  • Skeleton loaders
+
+
+================================================================================
+19. AUDIT TRAIL
+================================================================================
+
+URL:        Embedded within Settings → Audit Trail section
+Access:     Super Admin ONLY
+API:        GET /audit-trails
+            GET /audit-trails/statistics
+
+Description:
+  System activity log viewer showing all tracked actions performed by users.
+  Read-only — for monitoring and accountability purposes.
+
+Functions & Features:
+  • VIEW ONLY (read-only activity logs)
+
+  • View Log Details:
+      - Click on a row to see full log details in a modal
+      - Shows: Timestamp, Action, Module, User, Description, IP Address
+
+  • Stats Cards:
+      - Today's Activities (count)
+      - Create Actions (count)
+      - Update Actions (count)
+      - Delete Actions (count)
+
+  • Action Badges (color-coded):
+      - CREATE → Green
+      - UPDATE → Blue
+      - DELETE → Red
+      - LOGIN → Purple
+      - LOGOUT → Gray
+
+  • Module Icons:
+      - Dynamic icons per module (Products, Inventory, Partners,
+        Sales, Staff, Settings, Procurement, Processing, Authentication)
+
+  • Data Table:
+      Columns: Timestamp (PH timezone), Action, Module, User, Description
+      Searchable, sortable
+      Filter dropdown: All Actions, CREATE, UPDATE, DELETE, LOGIN, LOGOUT
+      Date range filter
+
+  • Skeleton loaders
+
+
+================================================================================
+20. ARCHIVES
+================================================================================
+
+URL:        Embedded within Settings → Archives section
+Access:     Super Admin ONLY
+API:        GET /archives
+            GET /archives/statistics
+            POST /archives/:module/:id/restore
+            DELETE /archives/:module/:id
+
+Description:
+  Manages soft-deleted/archived records across all modules. Records that
+  are archived (deleted) from any page appear here for review, restoration,
+  or permanent deletion.
+
+Supported Modules:
+  Products, Varieties, Suppliers, Customers, Procurements,
+  Drying Processes, Processings, Drivers, Deliveries
+
+Functions & Features:
+  • Restore Record:
+      - Confirm modal to restore an archived record back to active status
+      - Automatically restores status (Active for varieties/suppliers/customers,
+        Pending for procurements)
+      - Invalidates relevant caches after restoration
+
+  • Permanent Delete:
+      - Confirm modal to permanently remove a record from the database
+      - WARNING: This action CANNOT be undone
+
+  • "Archived By" Tracking:
+      - Shows who archived each record (pulled from audit trail)
+      - Displays user name with icon, or dash if unknown
+
+  • Module Filter:
+      - Dropdown filter to view archives by module type
+      - Options: All Modules, Product, Variety, Supplier, Customer,
+        Procurement, Drying Process, Processing, Driver, Delivery
+
+  • Module Icons & Colors:
+      - Each module has a distinct icon and color badge for identification
+
+  • Stats Cards:
+      - Total Archived (record count)
+      - Modules Affected (how many module types have archives)
+      - Most Recent (most recently archived record)
+
+  • Data Table:
+      Columns: Record (name + ID), Module, Archived Date, Archived By, Actions
+      Searchable, sortable, with module filter dropdown and date range filter
+      Uses composite keys (module:id) to avoid React key collisions
+
+  • Skeleton loaders
+
+
+================================================================================
+                              END OF DOCUMENTATION
+================================================================================
+
+Note: Driver and Client/Secretary page documentation will be added later
+as mentioned by the project owner.

@@ -1,0 +1,908 @@
+================================================================================
+   KJP RICEMILL — PWA & OFFLINE CAPABILITY ANALYSIS
+   Progressive Web App (PWA) Feasibility Study
+================================================================================
+
+TABLE OF CONTENTS:
+  1. What is PWA?
+  2. What PWA Gives Us
+  3. What "Offline Mode" Really Means
+  4. Analysis Per Role (Pros & Cons)
+  5. Technical Requirements to Implement PWA
+  6. What CAN Work Offline vs What CANNOT
+  7. Risks & Challenges
+  8. Recommendation
+  9. Implementation Phases (If We Proceed)
+
+================================================================================
+1. WHAT IS PWA?
+================================================================================
+
+A Progressive Web App (PWA) makes a web application behave more like a native
+mobile/desktop app. Key features:
+
+  - INSTALLABLE: Users can "install" the app on their phone/desktop home screen
+  - SERVICE WORKER: A background script that caches assets and can intercept
+    network requests
+  - OFFLINE SUPPORT: Can serve cached pages/data when internet is unavailable
+  - PUSH NOTIFICATIONS: Can send notifications even when app is closed
+  - APP-LIKE FEEL: Full screen, splash screen, no browser URL bar
+
+PWA does NOT change our code logic — it adds a caching/offline layer on top.
+
+================================================================================
+2. WHAT PWA GIVES US (GENERAL BENEFITS)
+================================================================================
+
+  ✅ App can be "installed" on phone/tablet/PC — no app store needed
+  ✅ Faster loading — cached assets (JS, CSS, images) load instantly
+  ✅ Works on slow/unstable internet — cached pages still render
+  ✅ Push notifications (future) — order updates, low stock alerts
+  ✅ Professional feel — splash screen, standalone window
+  ✅ No extra cost — uses existing React + Laravel stack
+  ✅ Single codebase — no separate Android/iOS app needed
+
+================================================================================
+3. WHAT "OFFLINE MODE" REALLY MEANS
+================================================================================
+
+IMPORTANT DISTINCTION:
+
+  "Offline-capable" does NOT mean the full system works without internet.
+
+  Our system is a SERVER-DEPENDENT application:
+    - All data lives in MySQL database on the server
+    - All business logic runs on Laravel backend
+    - Authentication requires server validation
+    - Multiple users access the same data simultaneously
+
+  OFFLINE can mean:
+    A) "CACHE-FIRST" — Show previously loaded data from cache (READ-ONLY)
+    B) "OFFLINE QUEUE" — Allow creating records offline, sync when back online
+    C) "FULL OFFLINE" — Complete local database mirror (very complex, not practical)
+
+  For our system, Option A (cache-first for reads) + limited Option B 
+  (queue writes for POS) is realistic.
+
+================================================================================
+4. ANALYSIS PER ROLE — PROS & CONS
+================================================================================
+
+--------------------------------------------------------------------------------
+ROLE: SUPER ADMIN
+--------------------------------------------------------------------------------
+
+  WHAT COULD WORK OFFLINE:
+    - View cached dashboard (last loaded stats/charts)
+    - View cached audit trail logs
+    - View cached business settings
+    - View cached staff list
+    - Browse cached product catalog
+
+  WHAT CANNOT WORK OFFLINE:
+    ✗ Create/edit admin accounts (needs server auth)
+    ✗ Change business settings (needs server write)
+    ✗ Change appearance/theme (needs server write)
+    ✗ Restore archived records (needs server)
+    ✗ Void/reverse sales (needs real-time data)
+    ✗ Database backup/export (needs server)
+    ✗ View LIVE dashboard data
+    ✗ Audit trail — new entries won't appear
+
+  PROS OF PWA FOR SUPER ADMIN:
+    + Can review last-known dashboard stats on the go
+    + Installable app on phone for quick access
+    + Faster page loads when online
+    + Push notifications for critical alerts (low stock, large sales)
+
+  CONS OF PWA FOR SUPER ADMIN:
+    - Almost all super admin tasks REQUIRE server connection
+    - Stale/outdated data could lead to wrong decisions
+    - Settings changes offline would cause conflicts
+    - Very little offline value — super admin work is inherently online
+    - Risk of confusion: "Why can't I change settings?"
+
+  VERDICT: ⚠️ LOW OFFLINE VALUE — Super admin needs live server for 90% of tasks.
+           PWA install + faster loading is still nice to have.
+
+--------------------------------------------------------------------------------
+ROLE: ADMIN (Shift Manager)
+--------------------------------------------------------------------------------
+
+  WHAT COULD WORK OFFLINE:
+    - View cached procurement list/history
+    - View cached drying process status
+    - View cached processing records
+    - View cached product list & inventory levels
+    - View cached sales history & reports
+    - View cached supplier/customer list
+    - View cached staff list
+    - Browse dashboard (last loaded data)
+
+  WHAT CANNOT WORK OFFLINE:
+    ✗ Create new procurement (needs server write + supplier validation)
+    ✗ Update drying process days (needs server, affects other records)
+    ✗ Start/complete processing (needs server, updates inventory)
+    ✗ Add/edit products (needs server + image upload)
+    ✗ Distribute stock to inventory (needs server, affects stock counts)
+    ✗ Process POS sales (needs server to record sale & deduct stock)
+    ✗ Manage orders (status updates need server)
+    ✗ Add suppliers/customers (needs server)
+    ✗ Manage staff (needs server)
+    ✗ ANY write operation that affects shared data
+
+  PROS OF PWA FOR ADMIN:
+    + Can review cached supply chain data when internet drops
+    + Quick reference: check product prices, stock levels (cached)
+    + Installable on office tablet/phone for quick access
+    + Faster everyday browsing (cached assets)
+    + Push notifications: low stock alerts, new orders, procurement due
+
+  CONS OF PWA FOR ADMIN:
+    - Core admin work (create/update/manage) ALL needs internet
+    - Supply chain is sequential — offline gaps break the flow
+    - Stale inventory data is DANGEROUS (could oversell)
+    - Cached procurement/drying status could be outdated
+    - Multiple admins editing = sync conflicts if offline writes allowed
+    - False sense of security: "I see stock = 50" but it's actually 10
+
+  VERDICT: ⚠️ MODERATE OFFLINE VALUE — Good for reviewing/reference.
+           Dangerous if relied on for operational decisions.
+
+--------------------------------------------------------------------------------
+ROLE: STAFF (POS Secretary)
+--------------------------------------------------------------------------------
+
+  WHAT COULD WORK OFFLINE:
+    - View cached product catalog (names, prices, images)
+    - View cached customer list
+    - POTENTIALLY: Create offline sales (queue & sync later) ← COMPLEX
+
+  WHAT CANNOT WORK OFFLINE:
+    ✗ Process real sales (stock deduction needs server)
+    ✗ Verify current stock levels (could be outdated)
+    ✗ Create new customers (needs server)
+    ✗ Accept GCash payments (needs server for reference tracking)
+    ✗ Generate receipts with server-side sale ID
+    ✗ Real-time price updates
+
+  PROS OF PWA FOR STAFF (POS):
+    + Product catalog loads instantly (cached images, prices)
+    + Can browse products even if internet hiccups
+    + Installable on POS tablet — feels like native app
+    + Faster POS experience overall (cached assets)
+    + POSSIBLE: Offline sale queue (create sale offline, sync when online)
+
+  CONS OF PWA FOR STAFF (POS):
+    - OFFLINE SALES ARE RISKY:
+      • Stock might be oversold (2 staff sell same last item)
+      • Price might have changed since last cache
+      • Customer data might be stale
+      • Sale IDs would need offline generation + conflict resolution
+      • GCash/digital payments impossible offline
+    - Cash-only sales COULD theoretically work offline, but risky
+    - Sync conflicts when multiple POS stations go offline simultaneously
+    - Receipt generation would be delayed until sync
+
+  VERDICT: ⚠️ MODERATE-HIGH VALUE for browsing, LOW for actual sales offline.
+           Offline POS is the #1 requested feature but also the riskiest.
+
+--------------------------------------------------------------------------------
+ROLE: STAFF (Driver)
+--------------------------------------------------------------------------------
+
+  WHAT COULD WORK OFFLINE:
+    - View cached assigned deliveries (address, items, customer info)
+    - View delivery route/address details
+    - POTENTIALLY: Mark delivery as "completed" offline → sync later
+
+  WHAT CANNOT WORK OFFLINE:
+    ✗ Get new delivery assignments (needs server)
+    ✗ Real-time status updates to admin
+    ✗ Upload delivery proof photos (needs server)
+    ✗ Contact customer through system
+
+  PROS OF PWA FOR DRIVER:
+    + VIEW deliveries while driving through poor signal areas
+    + Address/customer details available offline
+    + Installable on phone — quick access while on the road
+    + POTENTIALLY: Queue "delivered" status updates for when signal returns
+    + Push notifications for new delivery assignments
+    + This is the MOST USEFUL offline role
+
+  CONS OF PWA FOR DRIVER:
+    - Admin won't see real-time delivery status
+    - New deliveries won't appear until online
+    - If delivery details change while offline, driver has old info
+    - Photo proof upload delayed until online
+
+  VERDICT: ✅ HIGH OFFLINE VALUE — Drivers benefit most from offline capability.
+           Viewing delivery info + queuing status updates is very practical.
+
+--------------------------------------------------------------------------------
+ROLE: CLIENT (Customer)
+--------------------------------------------------------------------------------
+
+  WHAT COULD WORK OFFLINE:
+    - Browse cached product catalog (images, prices, descriptions)
+    - View cached order history
+    - View cached profile info
+    - Browse about/contact pages
+
+  WHAT CANNOT WORK OFFLINE:
+    ✗ Add to cart and place orders (needs server)
+    ✗ Make payments (needs server)
+    ✗ Track live order status
+    ✗ Register new account
+    ✗ Contact support
+
+  PROS OF PWA FOR CLIENT:
+    + Browse products anytime (even offline)
+    + Installable on phone — quick access to shop
+    + Faster product browsing (cached images)
+    + Push notifications: order status, promotions
+    + Check past orders offline
+
+  CONS OF PWA FOR CLIENT:
+    - Cannot actually BUY anything offline
+    - Prices might be outdated in cache
+    - Stock availability unknown until online
+    - Limited value — browsing without buying is not very useful
+
+  VERDICT: ⚠️ LOW-MODERATE OFFLINE VALUE — Nice for browsing, but purchasing
+           (the main purpose) requires internet.
+
+--------------------------------------------------------------------------------
+ROLE: PUBLIC VISITOR (No Auth)
+--------------------------------------------------------------------------------
+
+  WHAT COULD WORK OFFLINE:
+    - Home page (cached)
+    - About page (cached)
+    - Product catalog (cached)
+    - Contact info (cached, but can't send form)
+
+  PROS OF PWA FOR PUBLIC:
+    + Website loads even on slow connections
+    + Previously visited pages remain accessible
+    + Site feels fast and responsive
+
+  CONS OF PWA FOR PUBLIC:
+    - Can't submit contact form
+    - Product data might be outdated
+    - Can't login or register
+
+  VERDICT: ✅ MODERATE VALUE — Cached static pages are useful for first impressions.
+
+================================================================================
+5. TECHNICAL REQUIREMENTS TO IMPLEMENT PWA
+================================================================================
+
+  MUST ADD TO REACT FRONTEND:
+    □ manifest.json (app name, icons, theme color, display mode)
+    □ Service Worker (cache strategies for assets + API responses)
+    □ App icons (192x192 and 512x512 PNG minimum)
+    □ Splash screen configuration
+    □ "Install app" prompt handling
+    □ Offline fallback page
+    □ vite-plugin-pwa (Vite PWA plugin — easiest approach)
+
+  MUST ADD TO LARAVEL BACKEND:
+    □ Proper Cache-Control headers for API responses
+    □ API versioning awareness (for cache invalidation)
+    □ Offline sync endpoint (if implementing write queue)
+
+  FOR OFFLINE DATA (IF IMPLEMENTED):
+    □ IndexedDB storage (for caching API data locally)
+    □ Background Sync API (for queuing writes)
+    □ Conflict resolution strategy
+    □ Sync status indicator in UI
+
+  ESTIMATED EFFORT:
+    • Basic PWA (installable + asset caching): 1-2 days
+    • Cache-first reads (view cached data offline): 3-5 days
+    • Offline write queue (e.g., POS sales): 1-2 weeks
+    • Full conflict resolution + sync: 2-4 weeks
+
+================================================================================
+6. WHAT CAN vs CANNOT WORK OFFLINE — SUMMARY TABLE
+================================================================================
+
+  FEATURE                      | OFFLINE? | NOTES
+  -----------------------------|----------|----------------------------------
+  Install app on device        | ✅ YES   | Core PWA feature
+  View cached pages            | ✅ YES   | Previously visited pages only
+  View cached dashboard        | ⚠️ STALE | Data from last online visit
+  Browse product catalog       | ✅ YES   | Cached images + prices
+  View procurement history     | ⚠️ STALE | Read-only, last loaded data
+  View drying/processing       | ⚠️ STALE | Read-only, last loaded data
+  View sales history           | ⚠️ STALE | Read-only, last loaded data
+  View delivery assignments    | ✅ YES   | Great for drivers
+  Create procurement           | ❌ NO    | Needs server
+  Update drying process        | ❌ NO    | Needs server
+  Process milling              | ❌ NO    | Needs server
+  Add/edit products            | ❌ NO    | Needs server + image upload
+  POS — create sale            | ⚠️ RISKY | Possible but very complex
+  Manage orders                | ❌ NO    | Needs real-time data
+  Manage staff                 | ❌ NO    | Needs server
+  Change settings              | ❌ NO    | Needs server
+  Login/logout                 | ❌ NO    | Needs server auth
+  Upload images/files          | ❌ NO    | Needs server
+  Push notifications           | ✅ YES   | Requires notification server
+
+================================================================================
+7. RISKS & CHALLENGES
+================================================================================
+
+  1. STALE DATA RISK
+     - Users see old data and make wrong decisions
+     - Example: Admin sees "50 stocks" but it's actually 5
+     - Example: Staff sells product that's already out of stock
+
+  2. SYNC CONFLICTS
+     - Two users edit the same record offline
+     - Who wins? Last-write-wins? Merge? Manual resolution?
+     - Very complex for inventory/stock-related data
+
+  3. DATA CONSISTENCY
+     - Supply chain is sequential: Procurement → Drying → Processing → Inventory
+     - Breaking this chain with offline writes creates data integrity issues
+     - Foreign key relationships might fail during sync
+
+  4. USER CONFUSION
+     - "Why does the app show data but I can't do anything?"
+     - Need clear UI indicators: ONLINE ● / OFFLINE ●
+     - Need clear messaging about what's cached vs live
+
+  5. STORAGE LIMITS
+     - Browser local storage/IndexedDB has limits (varies by browser)
+     - Product images can consume significant cache space
+     - Need cache eviction strategy
+
+  6. SECURITY
+     - Cached data is accessible even after logout
+     - Sensitive data (customer info, sales) stored on device
+     - Need clear cache on logout
+     - Token expiry handling while offline
+
+  7. TESTING COMPLEXITY
+     - Must test online → offline → online transitions
+     - Must test sync conflicts
+     - Must test partial connectivity scenarios
+     - Significantly increases QA effort
+
+================================================================================
+8. RECOMMENDATION
+================================================================================
+
+  RECOMMENDED APPROACH: "PWA LITE" (Phase 1 Only for Capstone)
+  
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ✅ DO IMPLEMENT:                                           │
+  │    • Installable PWA (manifest.json + service worker)       │
+  │    • Asset caching (JS, CSS, images load fast)              │
+  │    • Offline fallback page ("You're offline" message)       │
+  │    • Cache previously viewed pages (read-only)              │
+  │    • Online/offline indicator in UI                         │
+  │                                                             │
+  │  ❌ DO NOT IMPLEMENT (for capstone):                        │
+  │    • Offline write queue (too complex, too risky)           │
+  │    • Offline POS sales (sync conflicts + stock issues)      │
+  │    • Full IndexedDB local database                          │
+  │    • Background sync                                        │
+  │                                                             │
+  │  REASON: The risk/complexity of offline writes far          │
+  │  outweighs the benefit for a rice mill system where         │
+  │  internet is generally available (Laragon/local setup).     │
+  │  PWA install + fast loading is the real win.                │
+  └─────────────────────────────────────────────────────────────┘
+
+  BENEFIT RANKING BY ROLE:
+    1. 🥇 Driver — Most benefit (view deliveries offline)
+    2. 🥈 Client — Browse products offline
+    3. 🥉 Admin — Reference cached data
+    4.    Staff POS — Fast loading, but POS needs internet
+    5.    Super Admin — Least benefit (all tasks need internet)
+    6.    Public — Minor benefit (cached static pages)
+
+================================================================================
+9. IMPLEMENTATION PHASES (IF WE PROCEED)
+================================================================================
+
+  PHASE 1: BASIC PWA (Recommended for Capstone) — 1-2 days
+    □ Install vite-plugin-pwa
+    □ Create manifest.json with app info + icons
+    □ Configure service worker for asset caching
+    □ Add offline fallback page
+    □ Add "Install App" button/prompt
+    □ Add online/offline status indicator
+    □ Test installation on Chrome, Edge, mobile
+
+  PHASE 2: SMART CACHING (Optional) — 3-5 days
+    □ Cache API responses (products, dashboard, etc.)
+    □ Implement stale-while-revalidate for API data
+    □ Cache product images for offline viewing
+    □ Show "cached data" indicator when offline
+    □ Clear sensitive cache on logout
+
+  PHASE 3: OFFLINE WRITES (Future/Post-Capstone) — 2-4 weeks
+    □ IndexedDB for local data storage
+    □ Offline sale queue (cash-only)
+    □ Background sync when connection restored
+    □ Conflict resolution strategy
+    □ Sync status dashboard
+    □ Extensive testing
+
+================================================================================
+
+  SUMMARY:
+    PWA = YES, absolutely worth it (installable + fast + professional)
+    Full Offline = NO, not practical for a multi-user server-dependent system
+    Compromise = Cache-first reads + clear offline indicators
+
+  LET'S DISCUSS which phase you want to implement!
+
+================================================================================
+
+
+================================================================================
+10. REVISED ANALYSIS — FULL OFFLINE MODE WITH IndexedDB
+    (Based on Discussion: Family-Operated Business Context)
+================================================================================
+
+  After further discussion, key context changes the analysis significantly:
+
+  IMPORTANT CONTEXT:
+    • The system is operated by ONE FAMILY (Super Admin = parent, Admin = son)
+    • It is NOT a multi-branch, multi-company system
+    • Secretary (Staff) only CREATES orders — does NOT deduct stock
+    • Stock deduction ONLY happens when Super Admin/Admin PROCESSES the order
+    • Customer only SENDS orders — admin receives when back online
+    • Driver only VIEWS deliveries and UPDATES status
+    • Offline mode is a BACKUP/FALLBACK — not the primary mode
+    • Primary use: when warehouse internet goes down or has interruptions
+    • The system should work identically online and offline
+
+  THIS CHANGES EVERYTHING. Here's why:
+
+================================================================================
+10.1 WHY FULL OFFLINE IS NOW FEASIBLE
+================================================================================
+
+  ORIGINAL CONCERN: "Multiple users editing same data = conflicts"
+
+  REALITY FOR KJP RICEMILL:
+    ┌──────────────────────────────────────────────────────────────┐
+    │  Only 1-2 people (family members) manage stock-critical      │
+    │  operations. The secretary and customer only CREATE orders    │
+    │  — they don't touch inventory. Stock deduction is a          │
+    │  MANUAL step done by admin/super admin when they PROCESS     │
+    │  the order. This means:                                      │
+    │                                                              │
+    │  • Order creation (offline) = SAFE (no stock change)         │
+    │  • Order processing (offline) = LOW RISK (1-2 people only)   │
+    │  • The "oversell" scenario requires 2 family members         │
+    │    both processing orders offline at the same time for the   │
+    │    same product — extremely unlikely in a single warehouse   │
+    └──────────────────────────────────────────────────────────────┘
+
+  THE WORKFLOW THAT MAKES IT SAFE:
+
+    CUSTOMER (offline):
+      Creates order → saved to IndexedDB → queued for sync
+      ↓ (when internet returns)
+      Syncs to server → Admin sees new order
+
+    SECRETARY/STAFF (offline):
+      Creates order on behalf of walk-in customer → saved to IndexedDB
+      ↓ (when internet returns)
+      Syncs to server → Admin sees new order
+
+    ADMIN / SUPER ADMIN (offline):
+      Processes order → deducts stock in IndexedDB locally
+      Creates procurement, drying, processing records → IndexedDB
+      ↓ (when internet returns)
+      Syncs ALL queued actions to server in order (FIFO)
+
+    DRIVER (offline):
+      Views assigned deliveries from IndexedDB cache
+      Marks delivery as completed → queued for sync
+      ↓ (when internet returns)
+      Syncs delivery status to server
+
+    EMAIL SENDING (offline):
+      All emails (order confirmation, notifications, etc.)
+      → Queued in IndexedDB with full email data
+      ↓ (when internet returns)
+      Background sync triggers Laravel to send all queued emails
+
+================================================================================
+10.2 HOW IndexedDB FULL OFFLINE WORKS — TECHNICAL FLOW
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    ONLINE MODE (Normal)                         │
+  │                                                                 │
+  │  User Action → API Call → Laravel Server → MySQL Database       │
+  │                    ↓                                            │
+  │              IndexedDB also updated (mirror/cache)              │
+  │                                                                 │
+  │  When online: server is the source of truth                     │
+  │  IndexedDB stays in sync as a local backup                      │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    OFFLINE MODE (Fallback)                      │
+  │                                                                 │
+  │  User Action → IndexedDB (local) → Queued in "sync_queue"      │
+  │                    ↓                                            │
+  │  UI shows ⚠️ OFFLINE banner + "X pending changes" badge        │
+  │  User can continue working normally                             │
+  │                                                                 │
+  │  When offline: IndexedDB is the temporary source of truth       │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                 SYNC ON RECONNECT (Automatic)                   │
+  │                                                                 │
+  │  Internet detected → Process sync_queue (FIFO order)            │
+  │       ↓                                                         │
+  │  For each queued action:                                        │
+  │    → Send API request to Laravel                                │
+  │    → If SUCCESS: remove from queue, update IndexedDB with       │
+  │      server response (get real IDs, timestamps)                 │
+  │    → If CONFLICT: flag for manual review, show notification     │
+  │    → If FAIL: retry with backoff, keep in queue                 │
+  │       ↓                                                         │
+  │  All queued emails sent by Laravel                              │
+  │  UI shows ✅ "All changes synced" confirmation                  │
+  └─────────────────────────────────────────────────────────────────┘
+
+================================================================================
+10.3 EVERY MODULE — OFFLINE BEHAVIOR
+================================================================================
+
+  MODULE: DASHBOARD
+  ─────────────────
+    Online:  Live data from server (real-time stats, charts)
+    Offline: Shows last-synced data from IndexedDB
+             Stats display "as of [last sync time]"
+             Charts render from cached data
+    Sync:    Auto-refresh when online returns
+
+  MODULE: PROCUREMENT
+  ────────────────────
+    Online:  Normal CRUD via API
+    Offline: CREATE → saved to IndexedDB + sync_queue
+             EDIT   → saved to IndexedDB + sync_queue
+             VIEW   → from IndexedDB cache
+             Status changes → queued
+    Sync:    All queued procurements sent to server in order
+    Risk:    LOW — usually 1 person creates procurements
+
+  MODULE: DRYING PROCESS
+  ───────────────────────
+    Online:  Normal CRUD via API
+    Offline: CREATE → saved to IndexedDB + sync_queue
+             INCREMENT DAY → saved locally + queued
+             MARK DRIED → saved locally + queued
+             VIEW → from IndexedDB cache
+    Sync:    Sequential sync preserves day-by-day progression
+    Risk:    LOW — sequential process, usually 1 operator
+
+  MODULE: PROCESSING (MILLING)
+  ─────────────────────────────
+    Online:  Normal CRUD via API
+    Offline: CREATE → saved to IndexedDB + sync_queue
+             START/COMPLETE → saved locally + queued
+             Output (kg, husk, yield) → calculated locally + queued
+             VIEW → from IndexedDB cache
+    Sync:    Syncs with calculated yields/outputs
+    Risk:    LOW — 1 operator at a time
+
+  MODULE: PRODUCTS & VARIETIES
+  ─────────────────────────────
+    Online:  Normal CRUD via API
+    Offline: CREATE → saved to IndexedDB + sync_queue
+             EDIT (price, name, etc.) → saved locally + queued
+             IMAGE UPLOAD → stored as blob in IndexedDB + queued
+             VIEW → from IndexedDB cache (including cached images)
+    Sync:    Products synced, images uploaded to server
+    Risk:    LOW-MEDIUM — price conflicts possible but unlikely (family)
+
+  MODULE: INVENTORY & STOCK
+  ──────────────────────────
+    Online:  Normal operations via API
+    Offline: DISTRIBUTE STOCK → saved locally + queued
+             STOCK ADJUSTMENTS → saved locally + queued
+             VIEW → from IndexedDB (shows local stock levels)
+    Sync:    Stock changes applied to server in order
+    Risk:    MEDIUM — but only admin/super admin touch this
+             Family context makes simultaneous conflicts very unlikely
+             ⚠️ Sync will VALIDATE stock levels: if server stock
+                doesn't match expected, flag for manual review
+
+  MODULE: POINT OF SALE (POS)
+  ────────────────────────────
+    Online:  Normal sale processing via API
+    Offline: BROWSE PRODUCTS → from IndexedDB (cached catalog)
+             CREATE ORDER → saved to IndexedDB + sync_queue
+             ⚠️ ORDER does NOT deduct stock (admin processes later)
+             CUSTOMER SELECTION → from IndexedDB cache
+             NEW CUSTOMER → saved locally + queued
+             PAYMENT: Cash recorded locally
+             PAYMENT: GCash → queued (reference saved, no verification)
+             RECEIPT → generated locally with temporary ID
+    Sync:    Orders sent to server → admin sees them when online
+             Server assigns real sale IDs, triggers notifications
+    Risk:    LOW — because stock deduction is NOT automatic
+             Staff ONLY creates orders, admin PROCESSES them
+
+  MODULE: ORDERS
+  ───────────────
+    Online:  Normal management via API
+    Offline: VIEW → from IndexedDB cache
+             STATUS UPDATE → saved locally + queued
+             PROCESS ORDER (admin) → deducts stock locally + queued
+             RETURNS → saved locally + queued
+    Sync:    Status changes synced in order
+    Risk:    LOW-MEDIUM — admin/super admin only
+
+  MODULE: PARTNERS (Suppliers & Customers)
+  ─────────────────────────────────────────
+    Online:  Normal CRUD via API
+    Offline: CREATE → saved to IndexedDB with temp UUID + queued
+             EDIT → saved locally + queued
+             VIEW → from IndexedDB cache
+    Sync:    New records synced, temp UUIDs replaced with server IDs
+    Risk:    VERY LOW — duplicate names handled by server validation
+
+  MODULE: STAFF MANAGEMENT
+  ─────────────────────────
+    Online:  Normal CRUD via API
+    Offline: VIEW → from IndexedDB cache
+             CREATE → saved locally + queued (rare operation)
+             EDIT → saved locally + queued
+    Sync:    Staff records synced to server
+    Risk:    VERY LOW — rarely done, family context
+
+  MODULE: DELIVERIES (Driver)
+  ────────────────────────────
+    Online:  Normal operations via API
+    Offline: VIEW ASSIGNED → from IndexedDB cache
+             MARK DELIVERED → saved locally + queued
+             VIEW ROUTE/ADDRESS → from IndexedDB cache
+    Sync:    Delivery status updates sent to server
+    Risk:    VERY LOW — each driver only manages their own deliveries
+
+  MODULE: SALES HISTORY & REPORTS
+  ────────────────────────────────
+    Online:  Live data from server
+    Offline: VIEW → from IndexedDB (last synced data)
+             PREDICTIONS → calculated from cached data
+             REPORTS → generated from IndexedDB data
+    Sync:    Auto-refresh with latest data
+    Risk:    NONE — read-only views
+
+  MODULE: SETTINGS (Business, Appearance, Profile)
+  ──────────────────────────────────────────────────
+    Online:  Normal settings management via API
+    Offline: VIEW → from IndexedDB cache
+             EDIT PROFILE → saved locally + queued
+             EDIT BUSINESS SETTINGS → saved locally + queued
+             EDIT APPEARANCE → applied locally + queued
+    Sync:    Settings synced to server (last-write-wins OK for single family)
+    Risk:    VERY LOW — single family, 1 super admin
+
+  MODULE: EMAIL SENDING
+  ──────────────────────
+    Online:  Laravel sends emails immediately
+    Offline: ALL emails queued in IndexedDB:
+             → Order confirmations
+             → Status update notifications
+             → Contact form submissions
+             → Low stock alerts
+             → Delivery assignment notifications
+             Each email stored with: to, subject, body, template, data, timestamp
+    Sync:    When online → POST /api/email/process-queue
+             Laravel processes all queued emails in order
+             Successfully sent emails removed from queue
+             Failed emails retry with backoff
+    Risk:    NONE — emails are inherently async, delay is acceptable
+
+  MODULE: AUDIT TRAIL
+  ────────────────────
+    Online:  Logged to server in real-time
+    Offline: Actions logged to IndexedDB with timestamp + user
+             Queued for sync
+    Sync:    Offline audit entries sent to server with original timestamps
+    Risk:    NONE — append-only log, no conflicts
+
+  MODULE: ARCHIVES
+  ─────────────────
+    Online:  Normal archive/restore via API
+    Offline: ARCHIVE (soft delete) → saved locally + queued
+             RESTORE → saved locally + queued
+             VIEW → from IndexedDB cache
+    Sync:    Archive/restore actions synced
+    Risk:    LOW — super admin only
+
+  MODULE: WEBSITE CMS
+  ────────────────────
+    Online:  Normal content management via API
+    Offline: EDIT content → saved locally + queued
+             IMAGE UPLOAD → stored as blob + queued
+             PREVIEW → from local changes
+    Sync:    Content updates pushed to server
+    Risk:    VERY LOW — super admin only, rarely changed
+
+================================================================================
+10.4 OFFLINE INDICATOR / WARNING SYSTEM
+================================================================================
+
+  The system will show clear indicators at all times:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  WHEN ONLINE:                                                   │
+  │                                                                 │
+  │  ● No special indicator (normal operation)                      │
+  │  ● If pending sync items exist from previous offline session:   │
+  │    Show: "⟳ Syncing X pending changes..." (auto-dismiss)       │
+  │  ● After sync complete:                                         │
+  │    Show: "✅ All changes synced successfully" (toast, 3 sec)    │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  WHEN OFFLINE:                                                  │
+  │                                                                 │
+  │  ┌───────────────────────────────────────────────────────────┐  │
+  │  │ ⚠️ You are currently OFFLINE                              │  │
+  │  │ Your changes are saved locally and will sync              │  │
+  │  │ automatically when internet is restored.                  │  │
+  │  │ Pending changes: 3                                        │  │
+  │  └───────────────────────────────────────────────────────────┘  │
+  │                                                                 │
+  │  This banner appears:                                           │
+  │    → Fixed at the TOP of every page (persistent, not dismissable│
+  │    → Yellow/amber background color                              │
+  │    → Shows count of pending changes                             │
+  │    → Visible in ALL roles (admin, staff, driver, client)        │
+  │                                                                 │
+  │  Additional indicators:                                         │
+  │    → Sidebar/navbar shows "OFFLINE" badge                       │
+  │    → Each queued action shows "⏳ Pending sync" tag            │
+  │    → Data labels show "Last updated: [timestamp]"               │
+  │    → Save buttons say "Save (will sync when online)"            │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  WHEN RECONNECTING:                                             │
+  │                                                                 │
+  │  ┌───────────────────────────────────────────────────────────┐  │
+  │  │ ⟳ Internet restored! Syncing 5 pending changes...        │  │
+  │  │ ████████░░░░░░░░░░ 3/5 synced                            │  │
+  │  └───────────────────────────────────────────────────────────┘  │
+  │                                                                 │
+  │  Shows progress bar during sync                                 │
+  │  If any conflict: "⚠️ 1 item needs your attention" (link)     │
+  └─────────────────────────────────────────────────────────────────┘
+
+================================================================================
+10.5 CROSS-DEVICE COMPATIBILITY
+================================================================================
+
+  PWA + IndexedDB works on ALL modern devices:
+
+    ✅ Desktop — Chrome, Edge, Firefox (Windows, Mac, Linux)
+    ✅ Mobile  — Chrome Android, Safari iOS (iPhone, iPad)
+    ✅ Tablet  — Android tablets, iPad
+    ✅ Laptop  — All browsers
+
+  INSTALL EXPERIENCE:
+    Desktop: "Install App" button → opens as standalone window
+    Mobile:  "Add to Home Screen" → opens as full-screen app
+    Tablet:  Same as mobile → great for POS terminal
+
+  IndexedDB STORAGE LIMITS:
+    Chrome:  Up to 80% of disk space (more than enough)
+    Firefox: Up to 2GB per origin
+    Safari:  Up to 1GB (important: clears after 7 days of non-use)
+    Edge:    Same as Chrome
+
+  NOTE: Safari on iOS has a 7-day eviction policy for IndexedDB if the
+  user doesn't visit the PWA. As long as the app is used regularly
+  (daily for a rice mill), this is NOT an issue.
+
+================================================================================
+10.6 UPDATED RISK ASSESSMENT — FAMILY BUSINESS CONTEXT
+================================================================================
+
+  ORIGINAL RISK:
+    "Multiple concurrent users editing = HIGH conflict risk"
+
+  REVISED RISK (Family-Operated Single Warehouse):
+    ┌────────────────────────────────────────────────────────────┐
+    │  Users who TOUCH stock: Super Admin + Admin (2 people)     │
+    │  Users who ONLY create orders: Staff + Customer            │
+    │  Users who ONLY view/update delivery: Driver               │
+    │                                                            │
+    │  Chance of 2 family members both offline AND both          │
+    │  processing the same order at the same time:               │
+    │                                                            │
+    │                    EXTREMELY LOW                            │
+    │                                                            │
+    │  And even if it happens, the sync process will:            │
+    │   1. Detect the stock mismatch                             │
+    │   2. Flag it for manual review                             │
+    │   3. Notify the admin to resolve it                        │
+    │                                                            │
+    │  This is acceptable for a family-run rice mill.            │
+    └────────────────────────────────────────────────────────────┘
+
+  RISK LEVEL PER MODULE (REVISED):
+
+    Module                  │ Original Risk │ Revised Risk │ Reason
+    ────────────────────────┼───────────────┼──────────────┼──────────────────
+    Procurement             │ MEDIUM        │ LOW          │ 1 person creates
+    Drying Process          │ MEDIUM        │ LOW          │ Sequential, 1 person
+    Processing              │ MEDIUM        │ LOW          │ Sequential, 1 person
+    Products                │ MEDIUM        │ LOW          │ Family, rare edits
+    Inventory / Stock       │ HIGH          │ LOW-MEDIUM   │ Only 2 family members
+    POS (Order Creation)    │ HIGH          │ LOW          │ Orders ≠ stock deduction
+    POS (Order Processing)  │ HIGH          │ LOW-MEDIUM   │ Only admin processes
+    Partners                │ LOW           │ VERY LOW     │ No conflict possible
+    Staff Management        │ LOW           │ VERY LOW     │ Rare operation
+    Deliveries              │ LOW           │ VERY LOW     │ Per-driver, no overlap
+    Settings                │ LOW           │ VERY LOW     │ 1 super admin
+    Email Queue             │ NONE          │ NONE         │ Async by nature
+    Audit Trail             │ NONE          │ NONE         │ Append-only
+    Dashboard / Reports     │ NONE          │ NONE         │ Read-only
+
+================================================================================
+10.7 FINAL VERDICT — FULL OFFLINE MODE
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                                                                 │
+  │   ✅  FULL OFFLINE MODE IS FEASIBLE AND RECOMMENDED            │
+  │                                                                 │
+  │   Given that:                                                   │
+  │     1. Family-operated business (low conflict chance)           │
+  │     2. Order creation ≠ stock deduction (safe to queue)         │
+  │     3. Only admin/super admin process orders (1-2 people)       │
+  │     4. Offline is a BACKUP, not primary mode                    │
+  │     5. All write operations are queued & synced via IndexedDB   │
+  │     6. Emails are queued & sent when online                     │
+  │     7. Clear OFFLINE warning shown at all times                 │
+  │     8. Works on desktop, mobile, tablet (all devices)           │
+  │     9. Sync conflicts are flagged for manual review             │
+  │                                                                 │
+  │   APPROACH: Every function works identically offline.           │
+  │   No need to block or disable any feature.                      │
+  │   The only difference: data syncs later instead of immediately. │
+  │                                                                 │
+  │   THINK OF IT AS:                                               │
+  │     Online  = Save & Send (instant)                             │
+  │     Offline = Save & Queue (send later)                         │
+  │                                                                 │
+  │   The user experience stays the SAME.                           │
+  │   The only addition is the offline warning banner.              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  FOR THE CAPSTONE PANEL:
+    "Our system implements a full Progressive Web App with IndexedDB-based
+     offline capability. All CRUD operations work offline by queuing changes
+     locally and automatically syncing when internet is restored. This is
+     designed as a fallback for warehouse internet interruptions. Stock
+     integrity is maintained because order creation and stock deduction are
+     separate steps — only authorized admin can process orders. Email
+     notifications are also queued and sent upon reconnection. The system
+     works on all devices — desktop, mobile, and tablet — and shows clear
+     offline/online indicators at all times."
+
+  IMPLEMENTATION: We can now proceed with FULL offline for ALL modules.
+  No feature customization needed — same UI, same functions, just with
+  IndexedDB as the local fallback + sync queue.
+
+================================================================================
