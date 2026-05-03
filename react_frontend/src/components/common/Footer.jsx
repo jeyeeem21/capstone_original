@@ -133,7 +133,7 @@ const Footer = ({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-center sm:text-left">
             <p className="text-gray-400 text-sm">
-              © {currentYear} {settings.business_name || 'KJP Rice Mill'} {settings.footer_copyright || 'Management System. All rights reserved.'} V2.0
+              © {currentYear} {settings.business_name || 'KJP Rice Mill'} {settings.footer_copyright || 'Management System. All rights reserved.'} V1.0
             </p>
             <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
               Powered by <span className="text-button-400 font-medium">{frameworkText}</span>
