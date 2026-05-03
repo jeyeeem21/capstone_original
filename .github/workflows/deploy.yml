@@ -36,6 +36,7 @@ jobs:
 
             # Run any new migrations
             php artisan migrate --force
+            php artisan db:seed --force
 
             # Clear and rebuild caches
             php artisan config:cache
